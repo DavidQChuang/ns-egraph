@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from egraph import Graph
@@ -151,8 +152,20 @@ class TestRecall(unittest.TestCase):
         cryostat = graph.add("work", "Thermal drift in cryostat")
         graph.save(self.graph)
 
-        # "pulsar" and "sedo" appear in 3 of 5 active nodes, so both are common here.
-        self.assertEqual(self.ranked("Did the pulsar sedo drift?"), [])
-        # One common word plus one distinctive word is still below the two-word threshold.
-        self.assertEqual(self.ranked("Plan the pulsar cooling"), [])
-        self.assertEqual(self.ranked("Is the cryostat thermal drift stable?"), [cryostat])
+        # Lower the minimum so that "pulsar" and "sedo", in 3 of 5 active titles, count as common.
+        with mock.patch("recall.MIN_COMMON", 2):
+            self.assertEqual(self.ranked("Did the pulsar sedo drift?"), [])
+            # One common word plus one distinctive word is still below the two-word threshold.
+            self.assertEqual(self.ranked("Plan the pulsar cooling"), [])
+            self.assertEqual(self.ranked("Is the cryostat thermal drift stable?"), [cryostat])
+
+    def test_small_store_keeps_shared_words(self):
+        # With the default minimum of 12, a 5-node store keeps "pulsar" and "sedo" as matchable.
+        graph = Graph.new("Field notes", "Recorded request.")
+        beam = graph.add("work", "Pulsar sedo beam tilt")
+        gain = graph.add("work", "Pulsar sedo gain check")
+        cooling = graph.add("work", "Sedo pulsar cooling")
+        graph.add("work", "Thermal drift in cryostat")
+        graph.save(self.graph)
+
+        self.assertCountEqual(self.ranked("Did the pulsar sedo drift?"), [beam, gain, cooling])

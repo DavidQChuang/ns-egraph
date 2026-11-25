@@ -19,7 +19,8 @@ MAX_CHARS = 5000
 MAX_ENTRIES = 3
 INACTIVE = {"retracted", "rejected"}
 OPEN_STATES = {"open", "running", "blocked", "needs_review"}
-COMMON_SHARE = 0.2
+COMMON_SHARE = 0.02
+MIN_COMMON = 12
 QUALIFIED = re.compile(r"(?<![\w.-])([\w.-]+\.json)#([\w-]+)(?:@(\d+))?")
 GRAPH_REQUEST = re.compile(r"(?:please )?(?:continue|resume|open|show|inspect) (.+)")
 STOP_WORDS = set("about again could explain graph investigation please should show task that their these "
@@ -58,7 +59,23 @@ def load_graphs(root: Path):
             continue
 
 
+def store_common(graphs) -> set[str]:
+    """Words that appear in more than max(MIN_COMMON, COMMON_SHARE * total) active titles across the
+    whole memory directory. A small store therefore keeps most words, and a large one drops generic ones."""
+    counts = Counter()
+    total = 0
+    for _, graph in graphs:
+        for nid in graph.d["nodes"]:
+            if graph.state(nid) in INACTIVE:
+                continue
+            total += 1
+            counts.update(words(" ".join(label(graph, nid).casefold().split())))
+    limit = max(MIN_COMMON, COMMON_SHARE * total)
+    return {word for word, count in counts.items() if count > limit}
+
+
 def matches(graphs, prompt: str):
+    common = store_common(graphs)
     qualified = QUALIFIED.findall(prompt)
     request = GRAPH_REQUEST.fullmatch(prompt.rstrip(".!?"))
     target = request[1] if request else None
@@ -73,9 +90,6 @@ def matches(graphs, prompt: str):
                                                       target.removeprefix("the ") in graph_names)
             titles = {nid: " ".join(label(graph, nid).casefold().split())
                       for nid in graph.d["nodes"] if graph.state(nid) not in INACTIVE}
-            counts = Counter(word for title in titles.values() for word in words(title))
-            limit = max(2, COMMON_SHARE * len(titles))
-            common = {word for word, count in counts.items() if count > limit}
             nodes = []
             for nid, title in titles.items():
                 payload = graph.cur(nid)["payload"]
