@@ -105,9 +105,7 @@ flowchart TD
 
 ## File format
 
-New graphs use `ns-egraph/1` JSON. The CLI also opens legacy version 1 graphs and preserves their schema identifier.
-
-Run the offline tests with `python3 -B -m unittest -v test_egraph`.
+Graphs use the `ns-egraph/1` JSON format.
 
 ## Recall and resume
 
@@ -144,7 +142,7 @@ python3 -m venv .venv
 .venv/bin/python recall.py recall examples "Why were the plants drooping?" --semantic
 ```
 
-The memory directory's `.semantic/` stores the derived vectors and local model files. Run `recall.py index DIRECTORY` again after editing graphs to refresh changed nodes. Queries skip vectors from older node revisions and use only the local cache. Keep `.semantic/` out of Git.
+The memory directory's `.semantic/` stores the derived vectors and local model files. Run `recall.py index DIRECTORY` again after editing graphs to refresh changed nodes. Queries use cached vectors for current node revisions. Keep `.semantic/` out of Git.
 
 ## Automatic recall in agent hosts
 
@@ -156,8 +154,6 @@ To opt in to embeddings, also copy `semantic_recall.py` and `requirements-semant
 
 ### Claude Code
 
-If you already installed the older adapter, copy the updated tools and `integrations/` into the same location. Existing `recall.py claude-hook` commands continue to work.
-
 Merge the two hook entries from [the settings example](integrations/claude/settings.json) into the project's `.claude/settings.local.json`. Copy [the agent rule](integrations/claude/rule.md) into `.claude/rules/ns-egraph.md`, or include it in your existing local project instructions. Restart Claude Code so it loads the hooks. [Claude Code hook reference](https://code.claude.com/docs/en/hooks)
 
 - New prompts receive a short excerpt only when recall finds a match. The exact prompt `continue` or `resume` also checks for this session's active graph.
@@ -166,13 +162,10 @@ Merge the two hook entries from [the settings example](integrations/claude/setti
 
 ### Kiro
 
-| Host | Configure hooks | Checkpoint recovery |
-| --- | --- | --- |
-| Kiro IDE 1.4.121+ or CLI V3 3.1+ | Copy [hooks.json](integrations/kiro/hooks.json) to `.kiro/hooks/ns-egraph.json`. | At session start and after compaction. |
-| Kiro CLI 2.x | Merge the [2.x hook entries](integrations/kiro/agent-hooks-v2.json) into your agent's `hooks` object. | When the agent starts. |
+Copy [hooks.json](integrations/kiro/hooks.json) to `.kiro/hooks/ns-egraph.json`. The hooks restore checkpoints at session start and after compaction. Post-compaction recovery requires Kiro IDE 1.4.121+ or Kiro CLI 3.1+ using the V3 engine. [Kiro hook triggers](https://kiro.dev/docs/hooks/types/)
 
-Copy [the steering file](integrations/kiro/steering.md) to `.kiro/steering/ns-egraph.md`. For a custom V3 agent, include the file in its resources. For CLI 2.x, load the guidance through your agent's workspace instructions or resources. [Kiro hook triggers](https://kiro.dev/docs/hooks/types/) · [CLI hook formats](https://kiro.dev/docs/cli/v3/hooks-migration/) · [Kiro steering](https://kiro.dev/docs/steering/)
+Copy [the steering file](integrations/kiro/steering.md) to `.kiro/steering/ns-egraph.md`. For a custom agent, include the file in its resources. [Kiro steering](https://kiro.dev/docs/steering/)
 
 On a relevant prompt, Kiro receives the same bounded excerpt as the CLI. An exact `continue` or `resume` looks up the checkpoint for the active Kiro session. Automatic recovery requires a checkpoint written with that session ID. The steering file explains how to save one and how to use a named checkpoint when the session ID is unavailable. Fresh sessions without a checkpoint, unrelated prompts, and unreadable memory produce no output.
 
-Run the complete offline suite with `python3 -B -m unittest -v`.
+Run the complete offline suite in `tests/` from the repository root with `python3 -B -m unittest -v`.

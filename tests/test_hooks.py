@@ -9,7 +9,7 @@ from pathlib import Path
 from integrations.hooks import format_context
 from recall import HEADER, MAX_CHARS, checkpoint
 
-HERE = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 
 
 class TestHookInstall(unittest.TestCase):
@@ -19,14 +19,14 @@ class TestHookInstall(unittest.TestCase):
         self.project = Path(temp.name)
         self.graphs = self.project / ".ns-egraph" / "graphs"
         self.graphs.mkdir(parents=True)
-        shutil.copyfile(HERE / "examples" / "greenhouse.json", self.graphs / "greenhouse.json")
+        shutil.copyfile(ROOT / "examples" / "greenhouse.json", self.graphs / "greenhouse.json")
         tool = self.graphs.parent / "tool"
-        shutil.copytree(HERE / "integrations", tool / "integrations")
+        shutil.copytree(ROOT / "integrations", tool / "integrations")
         for filename in ("recall.py", "egraph.py"):
-            shutil.copyfile(HERE / filename, tool / filename)
-        self.kiro = json.loads((HERE / "integrations" / "kiro" / "hooks.json").read_text())
-        self.legacy = json.loads((HERE / "integrations" / "kiro" / "agent-hooks-v2.json").read_text())
-        self.claude = json.loads((HERE / "integrations" / "claude" / "settings.json").read_text())
+            shutil.copyfile(ROOT / filename, tool / filename)
+        self.kiro = json.loads((ROOT / "integrations" / "kiro" / "hooks.json").read_text())
+        self.legacy = json.loads((ROOT / "integrations" / "kiro" / "agent-hooks-v2.json").read_text())
+        self.claude = json.loads((ROOT / "integrations" / "claude" / "settings.json").read_text())
 
     def run_hook(self, command, event=None, **env):
         environment = {key: value for key, value in os.environ.items()

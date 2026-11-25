@@ -7,6 +7,8 @@ from pathlib import Path
 
 from egraph import Graph, GraphError
 
+ROOT = Path(__file__).resolve().parents[1]
+
 
 def build():
     g = Graph.new("t", "Why did the seedlings wilt?")
@@ -175,7 +177,7 @@ class TestEgraph(unittest.TestCase):
             self.assertEqual(Graph.load(path).d["schema"], "ai-researcher-egraph/1")
 
     def test_standalone_cli(self):
-        tool = Path(__file__).with_name("egraph.py").resolve()
+        tool = ROOT / "egraph.py"
         with tempfile.TemporaryDirectory() as d:
             def run(*args):
                 return subprocess.run([sys.executable, tool, "g.json", "--actor", "sam", *args],
@@ -193,7 +195,7 @@ class TestEgraph(unittest.TestCase):
             self.assertEqual(g.state("src-3"), "rejected")
 
     def test_cli_roundtrip(self):
-        tool = str(Path(__file__).with_name("egraph.py"))
+        tool = str(ROOT / "egraph.py")
         with tempfile.TemporaryDirectory() as d:
             p = str(Path(d) / "g.json")
             run = lambda *a: subprocess.run([sys.executable, tool, p, *a], capture_output=True, text=True)  # noqa: E731

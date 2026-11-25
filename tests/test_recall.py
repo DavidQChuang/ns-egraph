@@ -10,7 +10,7 @@ from pathlib import Path
 from egraph import Graph
 from recall import MAX_CHARS, checkpoint, recall, resume
 
-HERE = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 
 
 class TestRecall(unittest.TestCase):
@@ -19,12 +19,12 @@ class TestRecall(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         self.root = Path(directory.name)
         self.graph = self.root / "greenhouse.json"
-        shutil.copyfile(HERE / "examples" / self.graph.name, self.graph)
+        shutil.copyfile(ROOT / "examples" / self.graph.name, self.graph)
 
     def hook(self, name, session="session-a", **fields):
         event = dict(hook_event_name=name, session_id=session, **fields)
         result = subprocess.run(
-            [sys.executable, "-B", HERE / "recall.py", "claude-hook", self.root],
+            [sys.executable, "-B", ROOT / "recall.py", "claude-hook", self.root],
             input=json.dumps(event), text=True, capture_output=True, check=True,
             env={**os.environ, "CLAUDE_ENV_FILE": str(self.root / "claude.env")},
         )

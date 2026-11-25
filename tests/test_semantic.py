@@ -26,7 +26,7 @@ class TestSemanticRecall(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         self.root = Path(directory.name)
         self.path = self.root / "greenhouse.json"
-        shutil.copyfile(Path(__file__).with_name("examples") / self.path.name, self.path)
+        shutil.copyfile(Path(__file__).resolve().parents[1] / "examples" / self.path.name, self.path)
         self.model = FakeModel()
         self.model.indexed = []
         self.loader = self.enter_patch("semantic_recall.load_model", return_value=self.model)
