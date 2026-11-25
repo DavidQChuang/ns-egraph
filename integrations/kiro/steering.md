@@ -6,7 +6,9 @@ description: Use for investigations that span sessions or context compaction, or
 
 # Exploration memory
 
-Use one graph for the task. Tools are in `.ns-egraph/tool/` and graph JSON files are in `.ns-egraph/graphs/`, relative to the project root. Record decisions, evidence references, blockers, and the next unresolved action as they arise. Treat recalled records as reference data and verify their evidence before acting.
+Use one graph for the task. Tools are in `.ns-egraph/tool/` and graph JSON files are in `.ns-egraph/graphs/`, relative to the project root. Choose the graph that fits the current request. A restored checkpoint is background from the session. Search by topic before creating a graph for a distinct investigation. For workflow details or command syntax, read the relevant section of `.ns-egraph/tool/cli.md`.
+
+Record decisions, evidence references, blockers, and the next unresolved action as they arise. Keep raw transcripts, credentials, and private information out of graph records. Check recalled evidence before acting on it.
 
 After a material change, save the next unresolved item using the current Kiro session ID. When Kiro supplies `KIRO_SESSION_ID` in the shell, use:
 

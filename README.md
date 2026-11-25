@@ -4,6 +4,8 @@ Track a bounded investigation in one local JSON file. Each question, hypothesis,
 
 Copy `egraph.py` anywhere with Python 3.10+ and run it directly. It uses only the standard library. A graph path is relative to the caller's working directory unless you give an absolute path.
 
+See the [agent CLI guide](cli.md) for the investigation workflow, command syntax, and checkpoint behavior.
+
 ## Try a session
 
 Run these commands in a directory with `egraph.py`, starting with a new graph file. Each write prints the assigned ID or revision. The example IDs apply to this sequence.
@@ -150,7 +152,7 @@ The memory directory's `.semantic/` stores the derived vectors and local model f
 
 ## Automatic recall in agent hosts
 
-From the project where you want memory, create `.ns-egraph/tool/` and `.ns-egraph/graphs/`. Copy `egraph.py`, `recall.py`, and the `integrations/` directory into `.ns-egraph/tool/`, preserving their relative paths. Ignore `.ns-egraph/` in the target project's Git config for private local memory. To try the example, copy `examples/greenhouse.json` into the graphs directory.
+From the project where you want memory, create `.ns-egraph/tool/` and `.ns-egraph/graphs/`. Copy `egraph.py`, `recall.py`, `README.md`, `cli.md`, and the `integrations/` directory into `.ns-egraph/tool/`, preserving their relative paths. Ignore `.ns-egraph/` in the target project's Git config for private local memory. To try the example, copy `examples/greenhouse.json` into the graphs directory.
 
 Both adapters enclose relevant context in a single `<ns_egraph_recall>` block. A short note says whether it came from a text match, a checkpoint, or a semantic match. The full block fits within 5,000 characters. On a miss, the hook is silent.
 
