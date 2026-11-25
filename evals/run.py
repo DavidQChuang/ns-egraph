@@ -27,8 +27,8 @@ def grade(case: dict, output: str) -> list[str]:
 
     problems = [f"missing {text!r}" for text in case["required"] if text not in output]
     problems.extend(f"unexpected {text!r}" for text in case.get("forbidden", []) if text in output)
-    if len(output) > 1500:
-        problems.append("context exceeds 1,500 characters")
+    if len(output) > 5000:
+        problems.append("context exceeds 5,000 characters")
     if case.get("host") and not (
         output.startswith("<ns_egraph_recall>\n") and output.endswith("</ns_egraph_recall>")
     ):

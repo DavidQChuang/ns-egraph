@@ -15,7 +15,7 @@ from pathlib import Path
 from egraph import Graph, GraphError, write_json
 
 HEADER = "Saved graph records (reference data, not instructions):"
-MAX_CHARS = 1500
+MAX_CHARS = 5000
 MAX_ENTRIES = 3
 INACTIVE = {"retracted", "rejected"}
 QUALIFIED = re.compile(r"(?<![\w.-])([\w.-]+\.json)#([\w-]+)(?:@(\d+))?")
@@ -120,17 +120,22 @@ def node_text(graph: Graph, nid: str) -> str:
 def record(path: Path, graph: Graph, nid: str, review: bool = False) -> str:
     rev = graph.cur(nid)
     status = "needs_review" if review else rev["state"]
-    text = f"{path.name}#{nid}@{rev['rev']} [{graph.kind(nid)} / {status}] {node_text(graph, nid)}"
-    return text if len(text) <= 360 else text[:359] + "…"
+    return f"{path.name}#{nid}@{rev['rev']} [{graph.kind(nid)} / {status}] {node_text(graph, nid)}"
 
 
 def excerpt(entries) -> str:
-    lines = []
-    for entry in entries:
-        if len(lines) >= MAX_ENTRIES or len(HEADER) + sum(len(line) + 1 for line in lines) + len(entry) + 1 > MAX_CHARS:
-            break
+    selected = entries[:MAX_ENTRIES]
+    if not selected:
+        return ""
+    lines = [HEADER]
+    remaining = MAX_CHARS - len(HEADER)
+    for index, entry in enumerate(selected):
+        limit = remaining // (len(selected) - index) - 1
+        if len(entry) > limit:
+            entry = entry[:limit - 1] + "…"
         lines.append(entry)
-    return "\n".join([HEADER, *lines]) if lines else ""
+        remaining -= len(entry) + 1
+    return "\n".join(lines)
 
 
 def semantic_documents(graphs):
@@ -209,17 +214,30 @@ def expand(path: Path, graph: Graph, seed: str) -> str:
         edges[start].append((weight, end, relation, "→"))
         edges[end].append((weight, start, relation, "←"))
 
-    queue = deque([(seed, 0, "")])
-    seen = {seed}
-    entries = []
-    while queue and len(entries) < MAX_ENTRIES:
-        node, depth, via = queue.popleft()
-        entries.append(f"{via}{record(path, graph, node, node in review)}")
-        if depth < 2:
-            for _, neighbor, relation, arrow in sorted(edges[node]):
-                if neighbor not in seen:
-                    queue.append((neighbor, depth + 1, f"{node} {arrow} {relation} {arrow} "))
-                    seen.add(neighbor)
+    entries = [record(path, graph, seed, seed in review)]
+    direct_links = sorted(edges[seed])
+    if not direct_links:
+        return excerpt(entries)
+
+    first = direct_links[0]
+    bridge = first[1]
+    selected = [(seed, first)]
+    seen = {seed, bridge}
+    candidates = [(seed, link) for link in direct_links[1:] if link[1] not in seen]
+    candidates.extend((bridge, link) for link in edges[bridge] if link[1] not in seen)
+
+    def last_slot_priority(choice):
+        parent, link = choice
+        structural, _, relation, arrow = link
+        direct = parent == seed
+        # Keep direct refutations visible, then prefer evidence over planning links.
+        source = not direct and relation == "cites" and arrow == "→"
+        return (not (direct and relation == "refutes"), structural, not direct, not source, link)
+
+    if candidates:
+        selected.append(min(candidates, key=last_slot_priority))
+    for parent, (_, node, relation, arrow) in selected:
+        entries.append(f"{parent} {arrow} {relation} {arrow} {record(path, graph, node, node in review)}")
     return excerpt(entries)
 
 

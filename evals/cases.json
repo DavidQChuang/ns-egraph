@@ -15,8 +15,9 @@
     "id": "same-node-id-different-graph",
     "category": "grounding",
     "prompt": "Look up dispatch.json#q-3",
-    "required": ["dispatch.json#q-3@2 [question / answered]", "dispatch.json#obs-5@1", "Dock C receives the late crate at 17:30."],
-    "forbidden": ["greenhouse.json#", "gallery.json#"]
+    "required": ["dispatch.json#q-3@2 [question / answered]", "q-3 ← answers ← dispatch.json#obs-5@1",
+                 "Dock C receives the late crate at 17:30.", "obs-5 → cites → dispatch.json#src-4@1"],
+    "forbidden": ["greenhouse.json#", "gallery.json#", "Check tomorrow's dispatch notices"]
   },
   {
     "id": "second-graph-alias",

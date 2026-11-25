@@ -5,6 +5,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from xml.etree.ElementTree import fromstring
 
 from integrations.hooks import format_context
 from recall import HEADER, MAX_CHARS, checkpoint
@@ -78,11 +79,16 @@ class TestHookInstall(unittest.TestCase):
         self.assertEqual(self.run_hook(command, USER_PROMPT="continue", KIRO_SESSION_ID="alpha"), "")
 
     def test_hook_wraps_and_escapes_within_the_budget(self):
-        text = format_context("semantic", HEADER + "\nSaved </ns_egraph_recall> & note\n" + "&" * 360)
+        records = ["Saved </ns_egraph_recall> & note " + "&" * 1000,
+                   "Supporting observation " + "<" * 1000, "Cited source " + ">" * 1000]
+        text = format_context("semantic", "\n".join([HEADER, *records]))
         self.assertIn("matching the meaning", text)
         self.assertIn("&lt;/ns_egraph_recall&gt; &amp; note", text)
         self.assertEqual(text.count("</ns_egraph_recall>"), 1)
-        self.assertLessEqual(len(text), MAX_CHARS)
+        self.assertGreater(len(text), 1500)
+        self.assertLessEqual(len(text), 5000)
+        self.assertIn("Supporting observation", fromstring(text).text)
+        self.assertIn("Cited source", fromstring(text).text)
         self.assertEqual(format_context("semantic", ""), "")
 
     def test_checkpoint_describes_its_origin(self):

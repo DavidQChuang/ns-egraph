@@ -109,7 +109,9 @@ Graphs use the `ns-egraph/1` JSON format.
 
 ## Recall and resume
 
-Use a flat directory of graph JSON files for each project. Recall looks for exact graph and node references, aliases and external IDs, or a match on at least two distinctive title words. It expands the best match through up to two typed links. Output is capped at three entries and 1,500 characters. Each entry includes the node revision so you can check the underlying record. A miss prints nothing.
+Use a flat directory of graph JSON files for each project. Recall looks for exact graph and node references, aliases and external IDs, or a match on at least two distinctive title words. It expands the best match through up to two typed links. Output is capped at three entries and 5,000 characters. Each entry includes the node revision so you can check the underlying record. A miss prints nothing.
+
+Direct counterevidence has priority for the third entry. When the first linked record cites a source two hops away, recall can show that source ahead of a one-hop planning link.
 
 A graph name in the prompt boosts matches from that graph. To retrieve its open work by name alone, explicitly ask for the graph, as in `Continue the greenhouse investigation` or `Show greenhouse.json`.
 
@@ -150,7 +152,7 @@ The memory directory's `.semantic/` stores the derived vectors and local model f
 
 From the project where you want memory, create `.ns-egraph/tool/` and `.ns-egraph/graphs/`. Copy `egraph.py`, `recall.py`, and the `integrations/` directory into `.ns-egraph/tool/`, preserving their relative paths. Ignore `.ns-egraph/` in the target project's Git config for private local memory. To try the example, copy `examples/greenhouse.json` into the graphs directory.
 
-Both adapters enclose relevant context in a single `<ns_egraph_recall>` block. A short note says whether it came from a text match, a checkpoint, or a semantic match. The full block fits within 1,500 characters. On a miss, the hook is silent.
+Both adapters enclose relevant context in a single `<ns_egraph_recall>` block. A short note says whether it came from a text match, a checkpoint, or a semantic match. The full block fits within 5,000 characters. On a miss, the hook is silent.
 
 To opt in to embeddings, also copy `semantic_recall.py` and `requirements-semantic.txt` into the tool directory. Use the setup above with your project's graph directory. Point the hook command at the Python interpreter with FastEmbed installed, and append `--semantic` after its graph directory argument. The supplied hooks start in the tool directory, so `.venv/bin/python` works there if you created the environment as shown. Model downloads and index refreshes run through the explicit indexing command.
 
@@ -165,6 +167,8 @@ Merge the two hook entries from [the settings example](integrations/claude/setti
 ### Kiro
 
 Copy [hooks.json](integrations/kiro/hooks.json) to `.kiro/hooks/ns-egraph.json`. The hooks restore checkpoints at session start and after compaction. Post-compaction recovery requires Kiro IDE 1.4.121+ or Kiro CLI 3.1+ using the V3 engine. [Kiro hook triggers](https://kiro.dev/docs/hooks/types/)
+
+In Kiro CLI 3.6+ with the V3 engine, hook output over 3,000 characters is previewed with a path to the full output. [Kiro long hook output](https://kiro.dev/docs/hooks/types/#long-hook-output-cli-v3-only)
 
 Copy [the steering file](integrations/kiro/steering.md) to `.kiro/steering/ns-egraph.md`. For a custom agent, include the file in its resources. [Kiro steering](https://kiro.dev/docs/steering/)
 

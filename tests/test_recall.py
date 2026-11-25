@@ -49,6 +49,54 @@ class TestRecall(unittest.TestCase):
             with self.subTest(prompt=prompt):
                 self.assertEqual(recall(self.root, prompt), "")
 
+    def test_two_hop_citation_takes_precedence_over_planning_link(self):
+        for chosen, other in ((0, 1), (1, 0)):
+            with self.subTest(chosen=chosen):
+                graph = Graph.new("Dispatch", "Where does the tray go?")
+                question = graph.add("question", "Where is dispatch?")
+                sources = [graph.add("source", "Dispatch sheet") for _ in range(2)]
+                obs = graph.add("observation", "Tray assigned", {"evidence": "The amber tray goes to Dock C."},
+                                cites=[sources[chosen]])
+                graph.link("answers", obs, question)
+                task = graph.add("work", "Prepare tomorrow's tray", derives_from=[question])
+                graph.save(self.graph)
+
+                text = recall(self.root, f"{self.graph.name}#{question}")
+                self.assertIn(f"{question} ← answers ← {self.graph.name}#{obs}@1", text)
+                self.assertIn(f"{obs} → cites → {self.graph.name}#{sources[chosen]}@1", text)
+                self.assertNotIn(f"{self.graph.name}#{sources[other]}@", text)
+                self.assertNotIn(f"{self.graph.name}#{task}@", text)
+
+    def test_direct_counterevidence_keeps_the_third_slot(self):
+        graph = Graph.new("Dispatch", "Which dock?")
+        hypothesis = graph.add("hypothesis", "The tray goes to Dock C")
+        source = graph.add("source", "Dispatch sheet")
+        support = graph.add("observation", "Tray label", {"evidence": "The label says Dock C."}, cites=[source])
+        graph.link("supports", support, hypothesis)
+        other = graph.add("observation", "Dispatch log entry", {"evidence": "The log says Dock C."})
+        graph.link("supports", other, hypothesis)
+        contradiction = graph.add("observation", "Dock closure", {"evidence": "Dock C is closed today."})
+        graph.link("refutes", contradiction, hypothesis)
+        graph.save(self.graph)
+
+        text = recall(self.root, f"{self.graph.name}#{hypothesis}")
+        self.assertIn(f"{hypothesis} ← supports ← {self.graph.name}#{support}@1", text)
+        self.assertIn(f"{hypothesis} ← refutes ← {self.graph.name}#{contradiction}@1", text)
+        self.assertNotIn(f"{self.graph.name}#{source}@", text)
+
+    def test_long_records_can_use_the_larger_budget(self):
+        graph = Graph.new("Dispatch", "Where is dispatch?")
+        question = graph.add("question", "Where does the tray go? " + "A" * 2200)
+        source = graph.add("source", "Dispatch sheet " + "B" * 2200)
+        obs = graph.add("observation", "Tray assigned", {"evidence": "C" * 2200}, cites=[source])
+        graph.link("answers", obs, question)
+        graph.save(self.graph)
+
+        text = recall(self.root, f"{self.graph.name}#{question}")
+        self.assertEqual(len(text), 5000)
+        self.assertEqual(len(text.splitlines()), 4)
+        self.assertIn(f"{obs} → cites → {self.graph.name}#{source}@1", text)
+
     def test_misses_and_unreadable_graphs_stay_quiet(self):
         (self.root / "partial.json").write_text("{")
         self.assertEqual(self.hook("UserPromptSubmit", prompt="Explain photosynthesis"), "")

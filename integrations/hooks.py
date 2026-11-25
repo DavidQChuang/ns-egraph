@@ -27,13 +27,19 @@ def format_context(method: str, text: str) -> str:
     )
     closing = "</ns_egraph_recall>"
     remaining = MAX_CHARS - len(opening) - len(closing)
+    records = text.removeprefix(HEADER + "\n").splitlines()
     lines = []
-    for line in text.removeprefix(HEADER + "\n").splitlines():
-        escaped = escape(line, quote=False) + "\n"
-        if len(escaped) > remaining:
-            break
-        lines.append(escaped)
-        remaining -= len(escaped)
+    for index, line in enumerate(records):
+        limit = remaining // (len(records) - index) - 1
+        escaped = escape(line, quote=False)
+        if len(escaped) > limit:
+            prefix = escaped[:limit - 1]
+            # Keep escaped entities intact when shortening a record.
+            if prefix.rfind("&") > prefix.rfind(";"):
+                prefix = prefix[:prefix.rfind("&")]
+            escaped = prefix + "…"
+        lines.append(escaped + "\n")
+        remaining -= len(escaped) + 1
     return opening + "".join(lines) + closing if lines else ""
 
 

@@ -24,6 +24,7 @@ def prepare(root: Path) -> None:
     edge = dispatch.link("supports", claim, goal)
     dispatch.accept(goal, [edge], "The dispatch schedule specifies Dock C.")
     access = dispatch.add("work", "Confirm Dock C access with the receiving team", derives_from=[claim])
+    dispatch.add("work", "Check tomorrow's dispatch notices", derives_from=[question])
     dispatch.save(root / "dispatch.json")
 
     gallery = Graph.new("Gallery condensation", "Why did the display cases fog up?")

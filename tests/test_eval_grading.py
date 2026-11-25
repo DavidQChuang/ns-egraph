@@ -18,5 +18,5 @@ class TestEvalGrading(unittest.TestCase):
     def test_checks_the_context_budget_and_hook_boundary(self):
         case = {"host": "kiro", "required": ["Dock C"]}
         self.assertTrue(grade(case, "Dock C"))
-        self.assertTrue(grade(case, "<ns_egraph_recall>\nDock C" + "x" * 1500 + "</ns_egraph_recall>"))
+        self.assertTrue(grade(case, "<ns_egraph_recall>\nDock C" + "x" * 5000 + "</ns_egraph_recall>"))
         self.assertEqual(grade(case, "<ns_egraph_recall>\nDock C\n</ns_egraph_recall>"), [])
