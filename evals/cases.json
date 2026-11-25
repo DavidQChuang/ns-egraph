@@ -1,0 +1,139 @@
+[
+  {
+    "id": "exact-reference",
+    "category": "grounding",
+    "prompt": "Locate greenhouse.json#obs-9@1",
+    "required": ["greenhouse.json#obs-9@1 [observation / active]", "only east seedlings wilted"]
+  },
+  {
+    "id": "match-alias-and-find-counterevidence",
+    "category": "grounding",
+    "prompt": "Did we rule out heat in the east bed?",
+    "required": ["greenhouse.json#h-5@2 [hypothesis / refuted]", "greenhouse.json#obs-9@1", "refutes", "only east seedlings wilted"]
+  },
+  {
+    "id": "same-node-id-different-graph",
+    "category": "grounding",
+    "prompt": "Look up dispatch.json#q-3",
+    "required": ["dispatch.json#q-3@2 [question / answered]", "dispatch.json#obs-5@1", "Dock C receives the late crate at 17:30."],
+    "forbidden": ["greenhouse.json#", "gallery.json#"]
+  },
+  {
+    "id": "second-graph-alias",
+    "category": "grounding",
+    "prompt": "What's the handoff for the evening crate?",
+    "required": ["dispatch.json#obs-5@1", "Dock C receives the late crate at 17:30."]
+  },
+  {
+    "id": "resume-named-investigation",
+    "category": "grounding",
+    "prompt": "Continue the greenhouse investigation",
+    "required": ["greenhouse.json#q-11@1 [question / open]", "Do seedlings recover after watering?"]
+  },
+  {
+    "id": "plant-paraphrase",
+    "category": "paraphrase",
+    "prompt": "Why were the plants drooping?",
+    "required": ["greenhouse.json#c-10@1", "Watering is the better first intervention"]
+  },
+  {
+    "id": "irrigation-paraphrase",
+    "category": "paraphrase",
+    "prompt": "Do they need more irrigation?",
+    "required": ["greenhouse.json#c-10@1", "Watering is the better first intervention"]
+  },
+  {
+    "id": "low-overlap-plant-paraphrase",
+    "category": "paraphrase",
+    "prompt": "What made the shoots sag?",
+    "required": ["greenhouse.json#c-10@1", "Watering is the better first intervention"]
+  },
+  {
+    "id": "delivery-paraphrase",
+    "category": "paraphrase",
+    "prompt": "Where should the delivery person hand over the box?",
+    "required": ["dispatch.json#", "Dock C"]
+  },
+  {
+    "id": "stale-conclusion",
+    "category": "freshness",
+    "prompt": "Show gallery.json#c-6",
+    "required": ["gallery.json#c-6@1 [claim / needs_review]"],
+    "forbidden": ["79% relative humidity", "gallery.json#obs-5"]
+  },
+  {
+    "id": "current-observation-revision",
+    "category": "freshness",
+    "prompt": "Show gallery.json#obs-5@2",
+    "required": ["gallery.json#obs-5@2 [observation / active]", "58% relative humidity"],
+    "forbidden": ["79% relative humidity"]
+  },
+  {
+    "id": "old-observation-revision",
+    "category": "abstention",
+    "prompt": "Show gallery.json#obs-5@1 and the initial logger report",
+    "silent": true
+  },
+  {
+    "id": "retracted-observation",
+    "category": "abstention",
+    "prompt": "Show gallery.json#obs-7",
+    "silent": true
+  },
+  {
+    "id": "ambiguous-local-id",
+    "category": "abstention",
+    "prompt": "Show q-3",
+    "silent": true
+  },
+  {
+    "id": "unrelated",
+    "category": "abstention",
+    "prompt": "Who won the baseball game yesterday?",
+    "silent": true
+  },
+  {
+    "id": "related-topic-without-answer",
+    "category": "abstention",
+    "prompt": "Can I grow succulents in a cold frame?",
+    "silent": true
+  },
+  {
+    "id": "incidental-graph-name",
+    "category": "abstention",
+    "prompt": "What angle should I use for a greenhouse roof in a snowy climate?",
+    "silent": true
+  },
+  {
+    "id": "claude-restores-checkpoint-after-compaction",
+    "category": "checkpoint",
+    "host": "claude",
+    "event": {"hook_event_name": "SessionStart", "source": "compact", "session_id": "garden-session"},
+    "required": ["restored from a checkpoint saved for the current session", "greenhouse.json#q-11@1",
+                 "Do seedlings recover after watering?"],
+    "forbidden": ["dispatch.json#", "gallery.json#"]
+  },
+  {
+    "id": "kiro-restores-different-session",
+    "category": "checkpoint",
+    "host": "kiro",
+    "event": {"hook_event_name": "PostCompact", "session_id": "dispatch-session"},
+    "required": ["restored from a checkpoint saved for the current session", "dispatch.json#w-7@1",
+                 "Confirm Dock C access with the receiving team"],
+    "forbidden": ["greenhouse.json#", "gallery.json#"]
+  },
+  {
+    "id": "resume-without-checkpoint",
+    "category": "checkpoint",
+    "host": "claude",
+    "event": {"hook_event_name": "UserPromptSubmit", "prompt": "continue", "session_id": "fresh-session"},
+    "silent": true
+  },
+  {
+    "id": "closed-checkpoint",
+    "category": "checkpoint",
+    "host": "kiro",
+    "event": {"hook_event_name": "SessionStart", "session_id": "closed-session"},
+    "silent": true
+  }
+]

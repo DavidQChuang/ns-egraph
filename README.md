@@ -169,3 +169,22 @@ Copy [the steering file](integrations/kiro/steering.md) to `.kiro/steering/ns-eg
 On a relevant prompt, Kiro receives the same bounded excerpt as the CLI. An exact `continue` or `resume` looks up the checkpoint for the active Kiro session. Automatic recovery requires a checkpoint written with that session ID. The steering file explains how to save one and how to use a named checkpoint when the session ID is unavailable. Fresh sessions without a checkpoint, unrelated prompts, and unreadable memory produce no output.
 
 Run the complete offline suite in `tests/` from the repository root with `python3 -B -m unittest -v`.
+
+## Synthetic evaluations
+
+The [development set](evals/cases.json) has 17 recall cases and four checkpoint cases across three fictional graphs. It checks whether an excerpt contains the expected revision-linked evidence, whether stale conclusions are flagged, whether a miss stays silent, and whether each hook restores the correct session. The runner builds the graphs and checkpoints in a temporary directory. [Evaluation design reference](https://huggingface.co/blog/agentic-evals)
+
+Run the lexical baseline from the repository root. Use `--output` to save the prompts or hook events, expected results, actual output, and timings for inspection.
+
+```sh
+python3 -B -m evals.run --output /tmp/ns-egraph-eval.json
+```
+
+To compare lexical recall with semantic fallback on the same prompts, use the Python environment and model cache from [the semantic setup](#optional-semantic-recall).
+
+```sh
+.venv/bin/python -B -m evals.run --model-cache examples/.semantic/models \
+  --output /tmp/ns-egraph-semantic-eval.json
+```
+
+The runner reports case failures separately from execution errors. The scores describe retrieval and hook output on this development set. Agent response quality in live hosts requires its own evaluation.
