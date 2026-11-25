@@ -34,6 +34,29 @@ OPEN_ITEM_LIMIT = 3
 OPEN_ITEM_CHARS = 100
 RARE_SHARE = 0.10
 RARE_MIN = 3
+MENU_STOP_ENGLISH = set("""a about above across after afterwards again against all almost alone along already also although
+always am among amongst an and another any anyhow anyone anything anyway anywhere are around as at be became
+because become becomes becoming been before beforehand behind being below beside besides between beyond both bottom
+but by can cannot could did do does doing done down during each either else elsewhere enough etc even ever every
+everyone everything everywhere except few for former formerly from further had has have having he hence her here
+hereafter hereby herein hereupon hers herself him himself his how however i if in indeed instead into is it its
+itself just keep last latter latterly least less made make many may me meanwhile might mine more moreover most mostly
+much must my myself namely neither never nevertheless next no nobody none noone nor not nothing now nowhere of off
+often on once one only onto or other others otherwise our ours ourselves out over own per perhaps please put rather
+re same see seem seemed seeming seems several she should since so some somehow someone something sometime sometimes
+somewhere still such take than that the their them themselves then thence there thereafter thereby therefore therein
+thereupon these they this those though through throughout thru thus to together too toward towards under until up
+upon us very via was we well were what whatever when whence whenever where whereafter whereas whereby wherein whereupon
+wherever whether which while whither who whoever whole whom whose why will with within without would yet you your
+yours yourself yourselves right back even get got getting gets also like want wants way ways going goes go""".split())
+
+# Generic software and process words that appear across many notes.
+# A store can extend this set.
+MENU_STOP_GENERIC = set("""test tests testing command commands change changes changed record records report reports review
+reviews result results output file files line lines user users agent agents session sessions graph graphs node
+nodes step steps item items check checks run runs data value values issue issues update updates work works working
+current live each after more""".split())
+MENU_STOP = frozenset(MENU_STOP_ENGLISH | MENU_STOP_GENERIC)
 NUMBER = re.compile(r"\b\d{4,}\b")
 QUESTIONS_FILE = "questions.json"
 QUESTION_LIMIT = 5
@@ -305,7 +328,7 @@ def menu_candidates(graphs, query: str, scope: str | None = None, size: int = ME
             if graph.kind(nid) == "origin" or graph.state(nid) in INACTIVE:
                 continue
             text = "\n".join([full_text(graph, nid), *questions.get(f"{path.name}#{nid}", [])])
-            nodes.append((path, nid, words(text), set(NUMBER.findall(text.casefold()))))
+            nodes.append((path, nid, words(text) - MENU_STOP, set(NUMBER.findall(text.casefold()))))
     total = len(nodes)
     df = Counter()
     number_df = Counter()
@@ -315,7 +338,7 @@ def menu_candidates(graphs, query: str, scope: str | None = None, size: int = ME
     limit = max(RARE_MIN, RARE_SHARE * total)
     idf = {word: math.log(1 + total / count) for word, count in df.items() if count <= limit}
     rare_numbers = {number for number, count in number_df.items() if count <= limit}
-    query_words = words(query)
+    query_words = words(query) - MENU_STOP
     query_numbers = set(NUMBER.findall(query.casefold()))
     candidates = []
     for path, nid, node_words, node_numbers in nodes:

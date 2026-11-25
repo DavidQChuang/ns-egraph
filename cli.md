@@ -224,6 +224,24 @@ egraph.py GRAPH brief NODE [--max-chars N]
 egraph.py GRAPH --actor NAME record EVIDENCE.jsonl
 ```
 
+## `menu` and `questions`
+
+`recall.py menu` lists up to five saved titles that share rare words or numeric ids with a query. A title is a candidate only when it shares at least two rare words, or a numeric id of four or more digits, with the query. A word is rare when it appears in at most 10% of the nodes, and at least three nodes. Common English words and generic words such as "test" or "report" never count. Each line shows `FILE#NODE_ID`, which `brief` accepts after the graph path.
+
+```text
+recall.py menu DIRECTORY QUERY [--session ID] [--graph NAME] [--size N]
+```
+
+With `--session`, the command keeps a count of which graph the session matched most, and searches that graph first. Pass `--graph` to search one graph. The prompt hook uses this command in its default mode.
+
+`recall.py questions` merges likely user questions into a sidecar file beside the graph directory. Each node can have up to five questions. Each entry is `FILE#NODE_ID` mapped to a list of strings. The command validates every entry before it writes anything. Questions help the menu find nodes that use different words from the request.
+
+```text
+recall.py questions DIRECTORY FILE.json
+```
+
+The hook's mode is set by `config.json` beside the graph directory. `{"recall_mode": "menu"}` is the default. `{"recall_mode": "excerpt"}` restores the older single-excerpt output.
+
 ## `recall` and `index`
 
 ```text

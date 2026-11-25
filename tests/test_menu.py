@@ -73,6 +73,19 @@ class MenuTest(unittest.TestCase):
         self.assertEqual([(path.name, nid) for _, path, nid in candidates], [("relay.json", valve)])
         self.assertEqual(menu_candidates(self.load(), "9921")[0][1].name, "relay.json")
 
+    def test_query_of_only_stop_words_gives_no_candidate(self):
+        self.save("a.json", ["more right after each changes"])
+        self.assertEqual(menu_candidates(self.load(), "more right after each changes"), [])
+
+    def test_generic_shared_word_does_not_count_toward_the_gate(self):
+        self.save("a.json", ["Pulsar test trace"])
+        self.assertEqual(menu_candidates(self.load(), "pulsar test"), [])
+
+    def test_two_distinctive_shared_words_make_a_candidate(self):
+        nid = self.save("a.json", ["Pulsar simidc trace"])[0]
+        candidates = menu_candidates(self.load(), "pulsar simidc")
+        self.assertEqual([(path.name, n) for _, path, n in candidates], [("a.json", nid)])
+
     def test_word_in_more_than_ten_percent_of_nodes_is_not_rare(self):
         titles = [f"record sample number{i:02d}" for i in range(30)]
         for i in range(6):
