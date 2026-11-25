@@ -210,6 +210,20 @@ python3 egraph.py examples/greenhouse.json overview --limit 4
 python3 egraph.py examples/greenhouse.json render > /tmp/greenhouse.mmd
 ```
 
+## `brief` and `record` for subagents
+
+`brief` prints one node for a subagent. It shows the node's state, its quote or statement (cut to 300 characters), and up to 12 neighbours with edge types and arrows. It ends with the reply contract. The default limit is 1500 characters, and `--max-chars` changes it. An unknown node exits 1.
+
+```text
+egraph.py GRAPH brief NODE [--max-chars N]
+```
+
+`record` applies findings that a subagent wrote as JSON lines. Each line has `kind` (`observation` or `source`), `title`, and `quote` for an observation. Attach it with `about` (a hypothesis, claim or question id from the brief), `relation` (`confirms`, `contradicts` or `adds`, required with `about`), `by` (a running or open work id), or both `about` and `by`. The command validates every line before it writes. If any line fails, it writes nothing and reports the line numbers. Pass `--actor` before `record` so the events show which subagent produced the findings.
+
+```text
+egraph.py GRAPH --actor NAME record EVIDENCE.jsonl
+```
+
 ## `recall` and `index`
 
 ```text
