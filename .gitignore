@@ -4,5 +4,6 @@ __pycache__/
 .pytest_cache/
 .ns-egraph/
 .checkpoints/
+.semantic/
 /sample.json
 /sample.mmd

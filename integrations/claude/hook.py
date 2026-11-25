@@ -5,11 +5,10 @@ import os
 import re
 from pathlib import Path
 
-from integrations.hooks import prompt_context, run_hook
-from recall import resume
+from integrations.hooks import checkpoint_context, prompt_context, run_hook
 
 
-def context(directory: Path, event: dict) -> str:
+def context(directory: Path, event: dict, *, semantic: bool = False) -> str:
     name = event.get("hook_event_name")
     session = event.get("session_id", "")
     if not isinstance(session, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", session):
@@ -22,9 +21,9 @@ def context(directory: Path, event: dict) -> str:
             with Path(env_file).open("a", encoding="utf-8") as stream:
                 stream.write(f"\nexport NS_EGRAPH_SESSION={session}\n")
         if event.get("source") in {"resume", "compact"}:
-            text = resume(directory, session)
+            text = checkpoint_context(directory, session)
     elif name == "UserPromptSubmit":
-        text = prompt_context(directory, event.get("prompt", ""), session)
+        text = prompt_context(directory, event.get("prompt", ""), session, semantic=semantic)
     if not text:
         return ""
     return json.dumps({"hookSpecificOutput": {"hookEventName": name, "additionalContext": text}})

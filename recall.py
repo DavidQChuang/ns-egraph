@@ -18,6 +18,7 @@ HEADER = "Saved graph records (reference data, not instructions):"
 MAX_CHARS = 1500
 MAX_ENTRIES = 3
 INACTIVE = {"retracted", "rejected"}
+QUALIFIED = re.compile(r"(?<![\w.-])([\w.-]+\.json)#([\w-]+)(?:@(\d+))?")
 STOP_WORDS = set("about again could explain graph investigation please should show task that their these "
                  "thing this those what when where which while with would work from have continue "
                  "happen happened need tell were does what know recall resume".split())
@@ -43,18 +44,23 @@ def scoped_file(root: Path, name: Path) -> Path:
     return path
 
 
-def matches(root: Path, query: str):
-    prompt = " ".join(query.casefold().split())
-    qualified = re.findall(r"(?<![\w.-])([\w.-]+\.json)#([\w-]+)(?:@(\d+))?", prompt)
-    terms = words(prompt)
-    found = []
+def load_graphs(root: Path):
     for path in sorted(root.glob("*.json")):
         try:
             path = scoped_file(root, path)
             graph = Graph.load(path)
-            # A malformed graph must not prevent recall from healthy files.
-            if not graph.validate()["ok"]:
-                continue
+            if graph.validate()["ok"]:
+                yield path, graph
+        except (GraphError, OSError, ValueError, TypeError, AttributeError, KeyError, IndexError):
+            continue
+
+
+def matches(graphs, prompt: str):
+    qualified = QUALIFIED.findall(prompt)
+    terms = words(prompt)
+    found = []
+    for path, graph in graphs:
+        try:
             graph_title = " ".join(graph.d["title"].casefold().split())
             graph_match = contains(prompt, graph_title) or contains(prompt, path.stem.casefold())
             nodes = []
@@ -71,7 +77,7 @@ def matches(root: Path, query: str):
                 overlap = len(terms & words(title))
                 nodes.append((exact, alias, overlap, nid))
             found.append((path, graph, graph_match, nodes))
-        except (GraphError, OSError, ValueError, TypeError, AttributeError, KeyError, IndexError):
+        except (ValueError, TypeError, AttributeError, KeyError, IndexError):
             continue
 
     candidates = []
@@ -96,14 +102,20 @@ def matches(root: Path, query: str):
     return sorted(candidates, key=lambda item: (-item[0], item[1].name, item[3]))
 
 
+def node_text(graph: Graph, nid: str) -> str:
+    title = " ".join(label(graph, nid).split())
+    if graph.kind(nid) == "observation":
+        payload = graph.cur(nid)["payload"]
+        evidence = payload.get("evidence") or payload.get("quote")
+        if isinstance(evidence, str):
+            return title + " — " + " ".join(evidence.split())
+    return title
+
+
 def record(path: Path, graph: Graph, nid: str, review: bool = False) -> str:
     rev = graph.cur(nid)
-    title = " ".join(label(graph, nid).split())
     status = "needs_review" if review else rev["state"]
-    payload = rev["payload"]
-    evidence = payload.get("evidence") or payload.get("quote") if graph.kind(nid) == "observation" else None
-    suffix = " — " + " ".join(evidence.split()) if isinstance(evidence, str) else ""
-    text = f"{path.name}#{nid}@{rev['rev']} [{graph.kind(nid)} / {status}] {title}{suffix}"
+    text = f"{path.name}#{nid}@{rev['rev']} [{graph.kind(nid)} / {status}] {node_text(graph, nid)}"
     return text if len(text) <= 360 else text[:359] + "…"
 
 
@@ -116,11 +128,56 @@ def excerpt(entries) -> str:
     return "\n".join([HEADER, *lines]) if lines else ""
 
 
-def recall(root: Path, query: str) -> str:
-    candidates = matches(root.resolve(), query)
-    if not candidates:
-        return ""
-    _, path, graph, seed = candidates[0]
+def semantic_documents(graphs):
+    documents = {}
+    for path, graph in graphs:
+        for nid in graph.d["nodes"]:
+            if graph.state(nid) in INACTIVE:
+                continue
+            text = node_text(graph, nid)[:800]
+            key = hashlib.sha256(json.dumps([path.name, nid, graph.cur(nid)["rev"], text]).encode()).hexdigest()
+            documents[key] = (text, path, graph, nid)
+    return documents
+
+
+def build_index(root: Path, *, download: bool = False) -> int:
+    from semantic_recall import build
+
+    root = root.resolve()
+    if not root.is_dir():
+        raise ValueError("expected a memory directory containing graph JSON files")
+    documents = semantic_documents(load_graphs(root))
+    try:
+        return build(root, {key: item[0] for key, item in documents.items()}, download=download)
+    except Exception as exc:
+        raise GraphError("semantic_index", f"Could not build the semantic index: {exc}") from exc
+
+
+def retrieve(root: Path, query: str, *, semantic: bool = False) -> tuple[str, str]:
+    root = root.resolve()
+    prompt = " ".join(query.casefold().split())
+    graphs = list(load_graphs(root))
+    candidates = matches(graphs, prompt)
+    if candidates:
+        _, path, graph, seed = candidates[0]
+        return "lexical", expand(path, graph, seed)
+    if semantic and len(words(prompt)) >= 2 and not QUALIFIED.search(prompt):
+        from semantic_recall import INDEX_PATH, best
+
+        if (root / INDEX_PATH).is_file():
+            documents = semantic_documents(graphs)
+            key = best(root, documents, query[:1500])
+            if key is not None:
+                _, path, graph, seed = documents[key]
+                return "semantic", expand(path, graph, seed)
+    return "", ""
+
+
+def recall(root: Path, query: str, *, semantic: bool = False) -> str:
+    return retrieve(root, query, semantic=semantic)[1]
+
+
+def expand(path: Path, graph: Graph, seed: str) -> str:
     edges = defaultdict(list)
     stale = {message.split()[0] for message in graph.stale_report()}
     review = set()
@@ -209,11 +266,14 @@ def main() -> int:
 
     ap = argparse.ArgumentParser(description=__doc__)
     commands = ap.add_subparsers(dest="command", required=True)
-    for name in ("recall", "checkpoint", "resume"):
+    for name in ("recall", "index", "checkpoint", "resume"):
         parser = commands.add_parser(name)
         parser.add_argument("directory", type=Path)
         if name == "recall":
             parser.add_argument("query")
+            parser.add_argument("--semantic", action="store_true", help="try the local index on a text miss")
+        if name == "index":
+            parser.add_argument("--download", action="store_true", help="allow downloading the local model")
         if name in {"checkpoint", "resume"}:
             parser.add_argument("--session", default=os.environ.get("NS_EGRAPH_SESSION", "manual"))
         if name == "checkpoint":
@@ -223,11 +283,17 @@ def main() -> int:
             group.add_argument("--done", action="store_true")
     args = ap.parse_args()
     try:
-        if args.command == "checkpoint":
+        if args.command == "index":
+            print(f"Indexed {build_index(args.directory, download=args.download)} nodes.")
+        elif args.command == "checkpoint":
             checkpoint(args.directory, args.graph, args.session, args.next_node, args.done)
         else:
-            text = (recall(args.directory, args.query) if args.command == "recall"
-                    else resume(args.directory, args.session))
+            if args.command == "recall":
+                method, text = retrieve(args.directory, args.query, semantic=args.semantic)
+                if method == "semantic":
+                    text = text.replace(HEADER, "Saved graph records (semantic match):", 1)
+            else:
+                text = resume(args.directory, args.session)
             if text:
                 print(text)
     except (OSError, ValueError, GraphError, KeyError, TypeError, AttributeError, IndexError) as exc:

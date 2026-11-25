@@ -131,9 +131,28 @@ python3 recall.py checkpoint examples greenhouse.json --done
 
 Use `--session NAME` for separate tasks in the same project. The default session is `manual` outside an integrated host. Checkpoints are local JSON files in the memory directory's `.checkpoints/` subdirectory.
 
+### Optional semantic recall
+
+Semantic recall tries a local English embedding model after a text miss. Exact references, aliases, and lexical matches still take precedence. The model chooses a starting node from cached vectors for current node titles and observation text. The same graph walk retrieves related evidence and applies the same review checks. Similarity is a relevance signal, and weak matches produce no output.
+
+From the tool directory, run the following commands. The first index build can download BAAI/bge-small-en-v1.5 with FastEmbed.
+
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements-semantic.txt
+.venv/bin/python recall.py index examples --download
+.venv/bin/python recall.py recall examples "Why were the plants drooping?" --semantic
+```
+
+The memory directory's `.semantic/` stores the derived vectors and local model files. Run `recall.py index DIRECTORY` again after editing graphs to refresh changed nodes. Queries skip vectors from older node revisions and use only the local cache. Keep `.semantic/` out of Git.
+
 ## Automatic recall in agent hosts
 
 From the project where you want memory, create `.ns-egraph/tool/` and `.ns-egraph/graphs/`. Copy `egraph.py`, `recall.py`, and the `integrations/` directory into `.ns-egraph/tool/`, preserving their relative paths. Ignore `.ns-egraph/` in the target project's Git config for private local memory. To try the example, copy `examples/greenhouse.json` into the graphs directory.
+
+Both adapters enclose relevant context in a single `<ns_egraph_recall>` block. A short note says whether it came from a text match, a checkpoint, or a semantic match. The full block fits within 1,500 characters. On a miss, the hook is silent.
+
+To opt in to embeddings, also copy `semantic_recall.py` and `requirements-semantic.txt` into the tool directory. Use the setup above with your project's graph directory. Point the hook command at the Python interpreter with FastEmbed installed, and append `--semantic` after its graph directory argument. The supplied hooks start in the tool directory, so `.venv/bin/python` works there if you created the environment as shown. Model downloads and index refreshes run through the explicit indexing command.
 
 ### Claude Code
 
