@@ -6,7 +6,7 @@
       "trigger": "UserPromptSubmit",
       "action": {
         "type": "command",
-        "command": "cd ./.ns-egraph/tool && python3 -B -m integrations.kiro.hook ../graphs"
+        "command": "python3 -B \".ns-egraph/tool/integrations\" kiro"
       },
       "timeout": 5
     },
@@ -15,7 +15,7 @@
       "trigger": "SessionStart",
       "action": {
         "type": "command",
-        "command": "cd ./.ns-egraph/tool && python3 -B -m integrations.kiro.hook ../graphs"
+        "command": "python3 -B \".ns-egraph/tool/integrations\" kiro"
       },
       "timeout": 5
     },
@@ -24,7 +24,7 @@
       "trigger": "PostCompact",
       "action": {
         "type": "command",
-        "command": "cd ./.ns-egraph/tool && python3 -B -m integrations.kiro.hook ../graphs"
+        "command": "python3 -B \".ns-egraph/tool/integrations\" kiro"
       },
       "timeout": 5
     }

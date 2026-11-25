@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd \"$CLAUDE_PROJECT_DIR/.ns-egraph/tool\" && python3 -B -m integrations.claude.hook ../graphs",
+            "command": "python3 -B \"${CLAUDE_PROJECT_DIR}/.ns-egraph/tool/integrations\" claude",
             "timeout": 5
           }
         ]
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd \"$CLAUDE_PROJECT_DIR/.ns-egraph/tool\" && python3 -B -m integrations.claude.hook ../graphs",
+            "command": "python3 -B \"${CLAUDE_PROJECT_DIR}/.ns-egraph/tool/integrations\" claude",
             "timeout": 5
           }
         ]

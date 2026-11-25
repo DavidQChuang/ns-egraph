@@ -152,29 +152,51 @@ The memory directory's `.semantic/` stores the derived vectors and local model f
 
 ## Automatic recall in agent hosts
 
-From the project where you want memory, create `.ns-egraph/tool/` and `.ns-egraph/graphs/`. Copy `egraph.py`, `recall.py`, `README.md`, `cli.md`, and the `integrations/` directory into `.ns-egraph/tool/`, preserving their relative paths. Ignore `.ns-egraph/` in the target project's Git config for private local memory. To try the example, copy `examples/greenhouse.json` into the graphs directory.
+Run the installer from the checkout and select the target project. Use the same commands with `--project .` when your working directory is the project and you call the installer by its path.
 
-Both adapters enclose relevant context in a single `<ns_egraph_recall>` block. A short note says whether it came from a text match, a checkpoint, or a semantic match. The full block fits within 5,000 characters. On a miss, the hook is silent.
+```sh
+python3 install.py install claude --project /path/to/project
+python3 install.py install kiro --project /path/to/project
+```
 
-To opt in to embeddings, also copy `semantic_recall.py` and `requirements-semantic.txt` into the tool directory. Use the setup above with your project's graph directory. Point the hook command at the Python interpreter with FastEmbed installed, and append `--semantic` after its graph directory argument. The supplied hooks start in the tool directory, so `.venv/bin/python` works there if you created the environment as shown. Model downloads and index refreshes run through the explicit indexing command.
+Each command sets up one host. The installer copies the CLI and guide to `.ns-egraph/tool/` and creates `.ns-egraph/graphs/`. Both hooks find that graph directory beside the installed tool. In a new memory directory, an internal Git ignore file keeps local graph data out of commits.
 
-### Claude Code
+| Host | Project configuration |
+| --- | --- |
+| Claude Code | Hooks are merged into `.claude/settings.local.json`. Agent guidance is installed at `.claude/rules/ns-egraph.md`. |
+| Kiro | Hooks are installed at `.kiro/hooks/ns-egraph.json`. Auto-included guidance is installed at `.kiro/steering/ns-egraph.md`. |
 
-Merge the two hook entries from [the settings example](integrations/claude/settings.json) into the project's `.claude/settings.local.json`. Copy [the agent rule](integrations/claude/rule.md) into `.claude/rules/ns-egraph.md`, or include it in your existing local project instructions. Restart Claude Code so it loads the hooks. [Claude Code hook reference](https://code.claude.com/docs/en/hooks)
+Restart or reopen the project in the host so it loads the hooks. New prompts receive a short excerpt on a match. A bare `continue` or `resume` checks the active session's checkpoint. The wrapper identifies text recall, semantic recall, or checkpoint restoration and fits within 5,000 characters. [Claude Code hooks](https://code.claude.com/docs/en/hooks) · [Kiro hooks](https://kiro.dev/docs/hooks/) · [Kiro steering](https://kiro.dev/docs/steering/)
 
-- New prompts receive a short excerpt only when recall finds a match. The exact prompt `continue` or `resume` also checks for this session's active graph.
-- Checkpoints written by the agent use the host session ID automatically. After compaction or when resuming that session, the adapter loads the latest saved pointer and next action. New sessions look up a named task through ordinary prompt recall.
-- The agent rule tells the host when to persist work. The adapter reads saved records and has no transcript ingestion or background model calls. Removing its hook entries and agent rule disables automatic use.
+To register Kiro hooks with one existing workspace agent profile, select it during installation. The installer adds the steering file to that profile's resources and remembers the profile for removal.
 
-### Kiro
+```sh
+python3 install.py install kiro --project /path/to/project --kiro-agent .kiro/agents/my-agent.json
+```
 
-Copy [hooks.json](integrations/kiro/hooks.json) to `.kiro/hooks/ns-egraph.json`. The hooks restore checkpoints at session start and after compaction. Post-compaction recovery requires Kiro IDE 1.4.121+ or Kiro CLI 3.1+ using the V3 engine. [Kiro hook triggers](https://kiro.dev/docs/hooks/types/)
+Kiro post-compaction recovery uses the `PostCompact` trigger in the IDE and CLI V3. Kiro CLI 3.6+ with the V3 engine previews hook output over 3,000 characters and provides a path to the full output. [Kiro hook triggers](https://kiro.dev/docs/hooks/types/)
 
-In Kiro CLI 3.6+ with the V3 engine, hook output over 3,000 characters is previewed with a path to the full output. [Kiro long hook output](https://kiro.dev/docs/hooks/types/#long-hook-output-cli-v3-only)
+### Enable semantic recall in a host
 
-Copy [the steering file](integrations/kiro/steering.md) to `.kiro/steering/ns-egraph.md`. For a custom agent, include the file in its resources. [Kiro steering](https://kiro.dev/docs/steering/)
+Start with a regular install. Add at least one graph, then prepare the installed tool's virtual environment and model cache. This example enables semantic recall for Claude Code. Use `kiro` to enable it for Kiro.
 
-On a relevant prompt, Kiro receives the same bounded excerpt as the CLI. An exact `continue` or `resume` looks up the checkpoint for the active Kiro session. Automatic recovery requires a checkpoint written with that session ID. The steering file explains how to save one and how to use a named checkpoint when the session ID is unavailable. Fresh sessions without a checkpoint, unrelated prompts, and unreadable memory produce no output.
+```sh
+project=/path/to/project
+tool="$project/.ns-egraph/tool"
+python3 -m venv "$tool/.venv"
+"$tool/.venv/bin/python" -m pip install -r "$tool/requirements-semantic.txt"
+"$tool/.venv/bin/python" "$tool/recall.py" index "$project/.ns-egraph/graphs" --download
+python3 install.py install claude --project "$project" --semantic
+```
+
+### Remove a host integration
+
+```sh
+python3 install.py remove claude --project /path/to/project
+python3 install.py remove kiro --project /path/to/project
+```
+
+Removal unregisters that host's hooks and guidance. The saved graphs, checkpoints, and shared CLI remain available for manual use. A file at a managed guidance or hook path with local edits is reported before changes are applied.
 
 Run the complete offline suite in `tests/` from the repository root with `python3 -B -m unittest -v`.
 

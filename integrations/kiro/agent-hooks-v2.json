@@ -2,12 +2,12 @@
   "hooks": {
     "userPromptSubmit": [
       {
-        "command": "cd ./.ns-egraph/tool && python3 -B -m integrations.kiro.hook ../graphs"
+        "command": "python3 -B \".ns-egraph/tool/integrations\" kiro"
       }
     ],
     "agentSpawn": [
       {
-        "command": "cd ./.ns-egraph/tool && python3 -B -m integrations.kiro.hook ../graphs"
+        "command": "python3 -B \".ns-egraph/tool/integrations\" kiro"
       }
     ]
   }

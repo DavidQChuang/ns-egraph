@@ -19,6 +19,16 @@ python3 egraph.py --help
 python3 recall.py --help
 ```
 
+## Install or remove host integration
+
+```text
+python3 install.py install claude|kiro [--project PATH] [--semantic]
+python3 install.py install kiro [--project PATH] [--kiro-agent PROFILE] [--semantic]
+python3 install.py remove claude|kiro [--project PATH]
+```
+
+The project defaults to the current directory. Pass `--kiro-agent` to merge hooks into an existing JSON profile under the project's `.kiro/agents/`. Prepare the installed tool's virtual environment and model cache before adding `--semantic`. The installer remembers which profile to update when you remove the integration. [Host setup](README.md#automatic-recall-in-agent-hosts)
+
 ## Paths and global option
 
 ```text
