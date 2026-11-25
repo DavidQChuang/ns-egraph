@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 from egraph import Graph
-from recall import MAX_CHARS, checkpoint, recall, resume
+from recall import MAX_CHARS, checkpoint, matches, recall, resume
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -129,3 +129,30 @@ class TestRecall(unittest.TestCase):
         graph.set_state("q-11", "answered")
         graph.save(self.graph)
         self.assertIn("greenhouse.json#w-12", resume(self.root, "session-a"))
+
+    def ranked(self, prompt):
+        return [nid for *_, nid in matches([(self.graph, Graph.load(self.graph))], prompt)]
+
+    def test_open_work_outranks_done_node_with_equal_overlap(self):
+        graph = Graph.new("Field notes", "Recorded request.")
+        done = graph.add("work", "Cryostat drift log")
+        graph.set_state(done, "done")
+        open_work = graph.add("work", "Cryostat drift check")
+        graph.save(self.graph)
+        self.assertLess(done, open_work)  # the done node has the lower id, so id order alone would pick it
+
+        self.assertEqual(self.ranked("Is the cryostat drift settling?"), [open_work, done])
+
+    def test_common_words_do_not_count_toward_overlap(self):
+        graph = Graph.new("Field notes", "Recorded request.")
+        graph.add("work", "Pulsar sedo beam tilt")
+        graph.add("work", "Pulsar sedo gain check")
+        graph.add("work", "Sedo pulsar cooling")
+        cryostat = graph.add("work", "Thermal drift in cryostat")
+        graph.save(self.graph)
+
+        # "pulsar" and "sedo" appear in 3 of 5 active nodes, so both are common here.
+        self.assertEqual(self.ranked("Did the pulsar sedo drift?"), [])
+        # One common word plus one distinctive word is still below the two-word threshold.
+        self.assertEqual(self.ranked("Plan the pulsar cooling"), [])
+        self.assertEqual(self.ranked("Is the cryostat thermal drift stable?"), [cryostat])
