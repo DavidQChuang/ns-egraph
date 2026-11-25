@@ -39,7 +39,15 @@ class TestRecall(unittest.TestCase):
         self.assertLessEqual(len(text), MAX_CHARS)
 
     def test_graph_name_resumes_open_work(self):
-        self.assertIn("Do seedlings recover", recall(self.root, "Continue the greenhouse investigation"))
+        for prompt in ("Continue the greenhouse investigation", "Inspect greenhouse.json.", "Please resume greenhouse"):
+            with self.subTest(prompt=prompt):
+                self.assertIn("Do seedlings recover", recall(self.root, prompt))
+
+    def test_incidental_graph_name_does_not_recall_open_work(self):
+        for prompt in ("What angle should I use for a greenhouse roof in a snowy climate?",
+                       "Continue planning the greenhouse roof"):
+            with self.subTest(prompt=prompt):
+                self.assertEqual(recall(self.root, prompt), "")
 
     def test_misses_and_unreadable_graphs_stay_quiet(self):
         (self.root / "partial.json").write_text("{")

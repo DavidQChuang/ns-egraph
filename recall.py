@@ -19,6 +19,7 @@ MAX_CHARS = 1500
 MAX_ENTRIES = 3
 INACTIVE = {"retracted", "rejected"}
 QUALIFIED = re.compile(r"(?<![\w.-])([\w.-]+\.json)#([\w-]+)(?:@(\d+))?")
+GRAPH_REQUEST = re.compile(r"(?:please )?(?:continue|resume|open|show|inspect) (.+)")
 STOP_WORDS = set("about again could explain graph investigation please should show task that their these "
                  "thing this those what when where which while with would work from have continue "
                  "happen happened need tell were does what know recall resume".split())
@@ -57,12 +58,17 @@ def load_graphs(root: Path):
 
 def matches(graphs, prompt: str):
     qualified = QUALIFIED.findall(prompt)
+    request = GRAPH_REQUEST.fullmatch(prompt.rstrip(".!?"))
+    target = request[1] if request else None
     terms = words(prompt)
     found = []
     for path, graph in graphs:
         try:
             graph_title = " ".join(graph.d["title"].casefold().split())
             graph_match = contains(prompt, graph_title) or contains(prompt, path.stem.casefold())
+            graph_names = {graph_title, path.stem.casefold(), path.name.casefold()}
+            graph_requested = target is not None and (target in graph_names or
+                                                      target.removeprefix("the ") in graph_names)
             nodes = []
             for nid in graph.d["nodes"]:
                 if graph.state(nid) in INACTIVE:
@@ -76,12 +82,19 @@ def matches(graphs, prompt: str):
                 alias = any(contains(prompt, str(value).casefold()) for value in aliases)
                 overlap = len(terms & words(title))
                 nodes.append((exact, alias, overlap, nid))
-            found.append((path, graph, graph_match, nodes))
+            found.append((path, graph, graph_match, graph_requested, nodes))
         except (ValueError, TypeError, AttributeError, KeyError, IndexError):
             continue
 
     candidates = []
-    for path, graph, graph_match, nodes in found:
+    for path, graph, graph_match, graph_requested, nodes in found:
+        if graph_requested and not qualified:
+            frontier = graph.frontier(1)
+            node = (frontier[0]["id"] if frontier else
+                    next((nid for nid in graph.d["nodes"] if graph.kind(nid) == "goal"), None))
+            if node:
+                candidates.append((100, path, graph, node))
+                continue
         for exact, alias, overlap, nid in nodes:
             if qualified:
                 if exact:
@@ -91,14 +104,6 @@ def matches(graphs, prompt: str):
             if local_id or alias or overlap >= 2:
                 candidates.append((50 * local_id + 20 * alias + overlap + 5 * graph_match,
                                    path, graph, nid))
-        if graph_match and not qualified:
-            frontier = graph.frontier(1)
-            if frontier:
-                candidates.append((5, path, graph, frontier[0]["id"]))
-            else:
-                goal = next((nid for nid in graph.d["nodes"] if graph.kind(nid) == "goal"), None)
-                if goal:
-                    candidates.append((5, path, graph, goal))
     return sorted(candidates, key=lambda item: (-item[0], item[1].name, item[3]))
 
 

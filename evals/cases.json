@@ -31,6 +31,12 @@
     "required": ["greenhouse.json#q-11@1 [question / open]", "Do seedlings recover after watering?"]
   },
   {
+    "id": "inspect-graph-file",
+    "category": "grounding",
+    "prompt": "Show greenhouse.json",
+    "required": ["greenhouse.json#q-11@1 [question / open]", "Do seedlings recover after watering?"]
+  },
+  {
     "id": "plant-paraphrase",
     "category": "paraphrase",
     "prompt": "Why were the plants drooping?",
@@ -102,6 +108,12 @@
     "id": "incidental-graph-name",
     "category": "abstention",
     "prompt": "What angle should I use for a greenhouse roof in a snowy climate?",
+    "silent": true
+  },
+  {
+    "id": "continuation-of-unrelated-work",
+    "category": "abstention",
+    "prompt": "Continue planning the greenhouse roof",
     "silent": true
   },
   {

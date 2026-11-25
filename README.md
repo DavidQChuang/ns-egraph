@@ -111,6 +111,8 @@ Graphs use the `ns-egraph/1` JSON format.
 
 Use a flat directory of graph JSON files for each project. Recall looks for exact graph and node references, aliases and external IDs, or a match on at least two distinctive title words. It expands the best match through up to two typed links. Output is capped at three entries and 1,500 characters. Each entry includes the node revision so you can check the underlying record. A miss prints nothing.
 
+A graph name in the prompt boosts matches from that graph. To retrieve its open work by name alone, explicitly ask for the graph, as in `Continue the greenhouse investigation` or `Show greenhouse.json`.
+
 ```sh
 python3 recall.py recall examples "Did we rule out heat in the east bed?"
 python3 recall.py recall examples "greenhouse.json#obs-9"
@@ -172,7 +174,7 @@ Run the complete offline suite in `tests/` from the repository root with `python
 
 ## Synthetic evaluations
 
-The [development set](evals/cases.json) has 17 recall cases and four checkpoint cases across three fictional graphs. It checks whether an excerpt contains the expected revision-linked evidence, whether stale conclusions are flagged, whether a miss stays silent, and whether each hook restores the correct session. The runner builds the graphs and checkpoints in a temporary directory. [Evaluation design reference](https://huggingface.co/blog/agentic-evals)
+The [development set](evals/cases.json) has 19 recall cases and four checkpoint cases across three fictional graphs. It checks whether an excerpt contains the expected revision-linked evidence, whether stale conclusions are flagged, whether a miss stays silent, and whether each hook restores the correct session. The runner builds the graphs and checkpoints in a temporary directory. [Evaluation design reference](https://huggingface.co/blog/agentic-evals)
 
 Run the lexical baseline from the repository root. Use `--output` to save the prompts or hook events, expected results, actual output, and timings for inspection.
 
