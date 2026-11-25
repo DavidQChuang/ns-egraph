@@ -201,9 +201,15 @@ def resume(root: Path, session: str) -> str:
 
 
 def main() -> int:
+    # Support existing hook configurations during the adapter move.
+    if sys.argv[1:2] == ["claude-hook"]:
+        from integrations.claude.hook import main as hook_main
+
+        return hook_main(sys.argv[2:])
+
     ap = argparse.ArgumentParser(description=__doc__)
     commands = ap.add_subparsers(dest="command", required=True)
-    for name in ("recall", "checkpoint", "resume", "claude-hook"):
+    for name in ("recall", "checkpoint", "resume"):
         parser = commands.add_parser(name)
         parser.add_argument("directory", type=Path)
         if name == "recall":
@@ -217,10 +223,7 @@ def main() -> int:
             group.add_argument("--done", action="store_true")
     args = ap.parse_args()
     try:
-        if args.command == "claude-hook":
-            from claude_hook import run
-            run(args.directory)
-        elif args.command == "checkpoint":
+        if args.command == "checkpoint":
             checkpoint(args.directory, args.graph, args.session, args.next_node, args.done)
         else:
             text = (recall(args.directory, args.query) if args.command == "recall"
@@ -228,9 +231,8 @@ def main() -> int:
             if text:
                 print(text)
     except (OSError, ValueError, GraphError, KeyError, TypeError, AttributeError, IndexError) as exc:
-        if args.command != "claude-hook":
-            print(str(exc), file=sys.stderr)
-            return 1
+        print(str(exc), file=sys.stderr)
+        return 1
     return 0
 
 

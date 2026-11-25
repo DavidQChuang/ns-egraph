@@ -1,0 +1,32 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Recall exploration context",
+      "trigger": "UserPromptSubmit",
+      "action": {
+        "type": "command",
+        "command": "cd ./.ns-egraph/tool && python3 -B -m integrations.kiro.hook ../graphs"
+      },
+      "timeout": 5
+    },
+    {
+      "name": "Resume exploration checkpoint",
+      "trigger": "SessionStart",
+      "action": {
+        "type": "command",
+        "command": "cd ./.ns-egraph/tool && python3 -B -m integrations.kiro.hook ../graphs"
+      },
+      "timeout": 5
+    },
+    {
+      "name": "Restore exploration checkpoint after compaction",
+      "trigger": "PostCompact",
+      "action": {
+        "type": "command",
+        "command": "cd ./.ns-egraph/tool && python3 -B -m integrations.kiro.hook ../graphs"
+      },
+      "timeout": 5
+    }
+  ]
+}

@@ -131,14 +131,29 @@ python3 recall.py checkpoint examples greenhouse.json --done
 
 Use `--session NAME` for separate tasks in the same project. The default session is `manual` outside an integrated host. Checkpoints are local JSON files in the memory directory's `.checkpoints/` subdirectory.
 
-## Automatic recall in Claude Code
+## Automatic recall in agent hosts
 
-From the project where you want memory, create `.ns-egraph/tool/` and `.ns-egraph/graphs/`. Copy `egraph.py`, `recall.py`, and `claude_hook.py` into `.ns-egraph/tool/`. Ignore `.ns-egraph/` in the target project's Git config for private local memory. To try the example, copy `examples/greenhouse.json` into the graphs directory.
+From the project where you want memory, create `.ns-egraph/tool/` and `.ns-egraph/graphs/`. Copy `egraph.py`, `recall.py`, and the `integrations/` directory into `.ns-egraph/tool/`, preserving their relative paths. Ignore `.ns-egraph/` in the target project's Git config for private local memory. To try the example, copy `examples/greenhouse.json` into the graphs directory.
+
+### Claude Code
+
+If you already installed the older adapter, copy the updated tools and `integrations/` into the same location. Existing `recall.py claude-hook` commands continue to work.
 
 Merge the two hook entries from [the settings example](integrations/claude/settings.json) into the project's `.claude/settings.local.json`. Copy [the agent rule](integrations/claude/rule.md) into `.claude/rules/ns-egraph.md`, or include it in your existing local project instructions. Restart Claude Code so it loads the hooks. [Claude Code hook reference](https://code.claude.com/docs/en/hooks)
 
 - New prompts receive a short excerpt only when recall finds a match. The exact prompt `continue` or `resume` also checks for this session's active graph.
 - Checkpoints written by the agent use the host session ID automatically. After compaction or when resuming that session, the adapter loads the latest saved pointer and next action. New sessions look up a named task through ordinary prompt recall.
 - The agent rule tells the host when to persist work. The adapter reads saved records and has no transcript ingestion or background model calls. Removing its hook entries and agent rule disables automatic use.
+
+### Kiro
+
+| Host | Configure hooks | Checkpoint recovery |
+| --- | --- | --- |
+| Kiro IDE 1.4.121+ or CLI V3 3.1+ | Copy [hooks.json](integrations/kiro/hooks.json) to `.kiro/hooks/ns-egraph.json`. | At session start and after compaction. |
+| Kiro CLI 2.x | Merge the [2.x hook entries](integrations/kiro/agent-hooks-v2.json) into your agent's `hooks` object. | When the agent starts. |
+
+Copy [the steering file](integrations/kiro/steering.md) to `.kiro/steering/ns-egraph.md`. For a custom V3 agent, include the file in its resources. For CLI 2.x, load the guidance through your agent's workspace instructions or resources. [Kiro hook triggers](https://kiro.dev/docs/hooks/types/) · [CLI hook formats](https://kiro.dev/docs/cli/v3/hooks-migration/) · [Kiro steering](https://kiro.dev/docs/steering/)
+
+On a relevant prompt, Kiro receives the same bounded excerpt as the CLI. An exact `continue` or `resume` looks up the checkpoint for the active Kiro session. Automatic recovery requires a checkpoint written with that session ID. The steering file explains how to save one and how to use a named checkpoint when the session ID is unavailable. Fresh sessions without a checkpoint, unrelated prompts, and unreadable memory produce no output.
 
 Run the complete offline suite with `python3 -B -m unittest -v`.
