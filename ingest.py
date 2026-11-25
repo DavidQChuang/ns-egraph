@@ -148,7 +148,7 @@ def convert(source_arg: str, graph: Path, title: str | None, origin: str | None,
     headings, events, skipped = parsed["headings"], parsed["events"], parsed["skipped"]
     source_title = parsed["title"] or Path(source_arg).name
     graph_title = title or source_title
-    run_egraph(graph, ["init", f"--title={graph_title}", f"--origin={origin or f'Converted from {source_arg}'}"])
+    run_egraph(graph, ["init", f"--title={graph_title}", f"--origin={origin or source_title}"])
     payload = json.dumps({"resource": source_arg})
     src = run_egraph(graph, ["add", "source", f"--title={source_title}", f"--payload={payload}"])["data"]["id"]
 
@@ -218,7 +218,7 @@ def main(argv=None) -> int:
     ap.add_argument("source_md", help="markdown run log or handoff to read")
     ap.add_argument("graph_json", type=Path, help="new graph file to create; must not exist")
     ap.add_argument("--title", help="graph title (default: the source title)")
-    ap.add_argument("--origin", help="origin statement (default: names the source file)")
+    ap.add_argument("--origin", help="origin statement (default: the document title)")
     ap.add_argument("--max-items", type=int, default=80, help="stop after this many observations (default 80)")
     a = ap.parse_args(argv)
     if a.max_items < 1:
