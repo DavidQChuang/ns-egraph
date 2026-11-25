@@ -8,6 +8,7 @@ Run "egraph.py GRAPH COMMAND --help" for individual commands.
 from __future__ import annotations
 
 import argparse
+import copy
 import datetime as _dt
 import json
 import os
@@ -54,6 +55,14 @@ EDGES = {
 }
 WORK_TRANSITIONS = {"open": {"running", "stopped", "done"}, "running": {"done", "blocked", "stopped", "open"},
                     "blocked": {"open", "stopped"}, "stopped": {"open"}, "done": set()}
+BRIEF_MAX_NEIGHBOURS = 12
+BRIEF_CONTRACT = ('Reply contract: write one JSON line per finding to your evidence file: '
+                  '{"kind":"observation","title":"...","quote":"...","about":"<hypothesis, claim or question id from '
+                  'this brief>","relation":"confirms|contradicts|adds","by":"<work id from this brief>"}. '
+                  'Give about, by, or both. The relation is required with about. Cite only ids shown above.')
+# record relation -> edge type from the observation to the "about" node
+RECORD_RELATIONS = {"confirms": "supports", "contradicts": "refutes", "adds": "derives"}
+RECORD_KINDS = ("observation", "source")
 PREFIX = {"origin": "origin", "goal": "goal", "question": "q", "hypothesis": "h", "work": "w", "source": "src",
           "observation": "obs", "claim": "c", "hint": "hint"}
 
@@ -567,6 +576,37 @@ class Graph:
                 lines.append(f"  style {nid.replace('-', '_')} stroke-dasharray: 5 5")
         return "\n".join(lines) + "\n"
 
+    def brief(self, nid: str, max_chars: int = 1500) -> str:
+        """Plain-text summary of one node and up to 12 neighbours, for a subagent's work item."""
+        n = self.node(nid)
+        cur = n["revisions"][-1]
+        lines = [f"{nid} {n['kind']} [{cur['state']}] {cur['title']}"]
+        text = cur["payload"].get("quote") or cur["payload"].get("statement")
+        if text:
+            text = " ".join(str(text).split())
+            lines.append(text if len(text) <= 300 else text[:297] + "...")
+        neighbours = []
+        for e in self.d["edges"]:
+            if e["src"] == nid:
+                neighbours.append((e["type"], e["dst"], "->"))
+            elif e["dst"] == nid:
+                neighbours.append((e["type"], e["src"], "<-"))
+        neighbours.sort(key=lambda x: (x[0], x[1]))
+        rows = []
+        for etype, other, arrow in neighbours:
+            o = self.cur(other)
+            rows.append(f"  {etype} {arrow} {other} {self.kind(other)} [{o['state']}] {o['title']}")
+        lines.append("Neighbours:")
+        footer = [BRIEF_CONTRACT]
+        shown_max = min(BRIEF_MAX_NEIGHBOURS, len(rows))
+        for shown in range(shown_max, -1, -1):
+            hidden = len(rows) - shown
+            body = rows[:shown] + ([f"...({hidden} more neighbours not shown)"] if hidden else [])
+            text_out = "\n".join(lines + body + footer)
+            if len(text_out) <= max_chars:
+                return text_out
+        raise ValueError(f"--max-chars {max_chars} is too small for the node header and reply contract")
+
     def overview(self, limit: int = 8) -> dict:
         nodes = self.d["nodes"]
         counts: dict = {}
@@ -598,6 +638,57 @@ def _payload(raw):
     return value
 
 
+def _parse_record(raw: str) -> dict:
+    """Check the fields of one record line. Graph-dependent checks happen in _apply_record."""
+    try:
+        rec = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise GraphError("invalid_json", str(e))
+    if not isinstance(rec, dict):
+        raise GraphError("invalid_argument", "record must be a JSON object")
+    kind = rec.get("kind")
+    if kind not in RECORD_KINDS:
+        raise GraphError("invalid_argument", f"kind must be one of {list(RECORD_KINDS)}")
+    if not isinstance(rec.get("title"), str) or not rec["title"].strip():
+        raise GraphError("invalid_argument", "title is required")
+    about, by = rec.get("about"), rec.get("by")
+    if about is None and by is None:
+        raise GraphError("invalid_argument", "give about, by, or both")
+    if about is not None:
+        if not isinstance(about, str) or not about.strip():
+            raise GraphError("invalid_argument", "about must be a node id")
+        if rec.get("relation") not in RECORD_RELATIONS:
+            raise GraphError("invalid_argument", f"relation must be one of {sorted(RECORD_RELATIONS)} when about is set")
+    payload = {}
+    if kind == "observation":
+        quote = rec.get("quote")
+        if not isinstance(quote, str) or not quote.strip():
+            raise GraphError("invalid_argument", "observation needs a quote")
+        payload["quote"] = quote
+    if by is not None and (not isinstance(by, str) or not by.strip()):
+        raise GraphError("invalid_argument", "by must be a work id")
+    return {"kind": kind, "title": rec["title"], "payload": payload, "about": about,
+            "relation": rec.get("relation"), "by": by}
+
+
+def _apply_record(g: Graph, rec: dict, actor: str) -> str:
+    about, by = rec["about"], rec["by"]
+    if about is not None and about not in g.d["nodes"]:
+        raise GraphError("not_found", f"about {about} is not a node")
+    if by is not None:
+        g.node(by)
+        if g.kind(by) != "work":
+            raise GraphError("invalid_relation", f"by {by} is a {g.kind(by)}, not a work item")
+        if g.state(by) not in ("running", "open"):
+            raise GraphError("stale_execution", f"{by} is {g.state(by)}; cannot produce output")
+    nid = g.add(rec["kind"], rec["title"], rec["payload"], actor=actor)
+    if about is not None:
+        g.link(RECORD_RELATIONS[rec["relation"]], nid, about, actor=actor)
+    if by is not None:
+        g.link("yields", by, nid, actor=actor)
+    return nid
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("graph", type=Path)
@@ -620,7 +711,9 @@ def main(argv=None) -> int:
     p = sub.add_parser("verify-source"); p.add_argument("node"); p.add_argument("verdict"); p.add_argument("--report", required=True)
     p = sub.add_parser("accept"); p.add_argument("goal"); p.add_argument("--edges", required=True)
     p.add_argument("--rationale", required=True); p.add_argument("--method", default="self")
-    sub.add_parser("validate"); sub.add_parser("render")
+    p = sub.add_parser("validate"); sub.add_parser("render")
+    p = sub.add_parser("brief"); p.add_argument("node"); p.add_argument("--max-chars", type=int, default=1500)
+    p = sub.add_parser("record"); p.add_argument("file", type=Path)
     p = sub.add_parser("frontier"); p.add_argument("--limit", type=int, default=10)
     p = sub.add_parser("overview"); p.add_argument("--limit", type=int, default=8)
     p = sub.add_parser("stop-check"); p.add_argument("--max-work", type=int, default=8)
@@ -664,6 +757,33 @@ def main(argv=None) -> int:
             out = g.validate(); print(json.dumps(out, indent=1)); return 0 if out["ok"] else 1
         elif a.cmd == "render":
             sys.stdout.write(g.render()); return 0
+        elif a.cmd == "brief":
+            if a.node not in g.d["nodes"]:
+                print(f"brief: unknown node {a.node}", file=sys.stderr); return 1
+            try:
+                print(g.brief(a.node, a.max_chars))
+            except ValueError as e:
+                print(f"brief: {e}", file=sys.stderr); return 2
+            return 0
+        elif a.cmd == "record":
+            ids, errors = [], []
+            for lineno, raw in enumerate(a.file.read_text(encoding="utf-8").splitlines(), 1):
+                if not raw.strip():
+                    continue
+                try:
+                    rec = _parse_record(raw)
+                    trial = Graph(copy.deepcopy(g.d))  # a failed line must not leave partial nodes behind
+                    nid = _apply_record(trial, rec, a.actor)
+                except GraphError as e:
+                    errors.append(f"line {lineno}: {e}")
+                    continue
+                ids.append(nid)
+                g = trial
+            if errors:
+                print("\n".join(errors), file=sys.stderr); return 1
+            if ids:
+                g.save(a.graph)
+            print(json.dumps({"ok": True, "recorded": len(ids), "ids": ids})); return 0
         elif a.cmd == "frontier":
             print(json.dumps(g.frontier(a.limit), indent=1)); return 0
         elif a.cmd == "overview":
