@@ -194,6 +194,45 @@ class TestEgraph(unittest.TestCase):
             self.assertIn("informs order-42", g.frontier()[0]["reasons"])
             self.assertEqual(g.state("src-3"), "rejected")
 
+    def test_alias_warning_when_term_is_too_broad(self):
+        g = Graph.new("t", "o")
+        g.add("hypothesis", "Clock source Pulsar", {"aliases": ["Pulsar"]})
+        g.add("question", "Pulsar timing drift?")
+        g.add("question", "Check the pulsar cable")
+        g.add("question", "PULSAR gate setting")
+        g.add("question", "Pulsar")
+        g.add("question", "Pulsars are noisy")  # whole word only: not a match
+        v = g.validate()
+        self.assertTrue(v["ok"], v)
+        self.assertIn("alias 'Pulsar' on h-2 matches 4 other nodes; use a more specific term", v["warnings"])
+
+    def test_alias_warning_threshold_and_inactive_nodes(self):
+        g = Graph.new("t", "o")
+        g.add("hypothesis", "Clock source", {"aliases": ["Pulsar"]})
+        g.add("question", "Pulsar timing")
+        g.add("question", "Pulsar cable")
+        g.add("question", "Pulsar gate")
+        self.assertTrue(any("alias 'Pulsar'" in w for w in g.validate()["warnings"]))
+        g.set_state("q-4", "parked")  # parked is still active
+        self.assertTrue(any("matches 3 other nodes" in w for w in g.validate()["warnings"]))
+        w = g.add("work", "Pulsar sweep")
+        g.set_state(w, "stopped")  # stopped nodes do not count
+        self.assertTrue(any("matches 3 other nodes" in x for x in g.validate()["warnings"]))
+        g2 = Graph.new("t", "o")
+        g2.add("hypothesis", "Clock source", {"aliases": ["Pulsar"]})
+        g2.add("question", "Pulsar timing")
+        g2.add("question", "Pulsar cable")
+        w2 = g2.add("work", "Pulsar sweep")
+        g2.set_state(w2, "stopped")
+        self.assertFalse([x for x in g2.validate()["warnings"] if "alias" in x])
+
+    def test_alias_on_ref_id_gives_no_warning(self):
+        g = Graph.new("t", "o")
+        g.add("hypothesis", "Pump fault", {"aliases": ["ec1549b8"]})
+        for title in ("Check pump log", "Read vendor note", "Compare runs", "Inspect seal"):
+            g.add("question", title, {"refs": ["ec1549b8"]})
+        self.assertEqual(g.validate()["warnings"], [])
+
     def test_cli_roundtrip(self):
         tool = str(ROOT / "egraph.py")
         with tempfile.TemporaryDirectory() as d:

@@ -11,6 +11,7 @@ import argparse
 import datetime as _dt
 import json
 import os
+import re
 import sys
 import tempfile
 import textwrap
@@ -19,6 +20,8 @@ from pathlib import Path
 SCHEMA = "ns-egraph/1"
 LEGACY_SCHEMA = "ai-researcher-egraph/1"
 DEFAULT_ACTOR = "user"
+# States that take a node out of "active" for alias checks. Evidence uses "retracted".
+INACTIVE_STATES = {"retracted", "rejected", "refuted", "abandoned", "stopped", "consumed"}
 
 KINDS = {
     "origin": {"recorded"},
@@ -409,6 +412,7 @@ class Graph:
             if self._reaches_via(nid, ("supports", "refutes")):
                 errors.append(f"evidence cycle through {nid}")
                 break
+        warnings += self._alias_warnings()
         if any("dangling" in x for x in errors):
             return {"ok": False, "errors": errors, "warnings": warnings, "revision": self.d["revision"]}
         warnings += [f"stale: {s}" for s in self.stale_report()]
@@ -419,6 +423,31 @@ class Graph:
 
     def _reaches_via(self, nid, types):
         return any(self._reaches(e["dst"], nid, types) for e in self.d["edges"] if e["src"] == nid and e["type"] in types)
+
+    def _alias_warnings(self, threshold: int = 3) -> list[str]:
+        """Warn about aliases that also match enough other active nodes to be too broad.
+
+        A node matches an alias when the alias appears as a whole word or phrase, ignoring case,
+        in its title or in one of its aliases. "refs" are never matched.
+        """
+        active = {nid: n["revisions"][-1] for nid, n in self.d["nodes"].items()
+                  if n["revisions"][-1]["state"] not in INACTIVE_STATES}
+
+        def aliases_of(cur) -> list[str]:
+            raw = cur["payload"].get("aliases")
+            return [a for a in raw if isinstance(a, str)] if isinstance(raw, list) else []
+
+        out = []
+        for nid, cur in active.items():
+            for alias in aliases_of(cur):
+                if not alias.strip():
+                    continue
+                pattern = re.compile(r"(?<!\w)" + re.escape(alias.strip()) + r"(?!\w)", re.IGNORECASE)
+                hits = sum(1 for other, ocur in active.items() if other != nid and (
+                    pattern.search(ocur["title"]) or any(pattern.search(a) for a in aliases_of(ocur))))
+                if hits >= threshold:
+                    out.append(f"alias '{alias}' on {nid} matches {hits} other nodes; use a more specific term")
+        return out
 
     def _sources_behind(self, nid, depth=0) -> set:
         out = set()
