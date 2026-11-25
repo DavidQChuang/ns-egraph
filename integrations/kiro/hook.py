@@ -5,7 +5,7 @@ from pathlib import Path
 
 from integrations.hooks import (
     CHECKPOINT_EVENTS, PROMPT_EVENTS, RESTORE_EVENTS, STARTED_EVENTS, Injection, auto_checkpoint,
-    checkpoint_context, log_event, mark_started, normalize, prompt_context, run_hook,
+    checkpoint_context, log_event, mark_started, normalize, prompt_context, reset_shown, run_hook,
 )
 
 
@@ -22,6 +22,8 @@ def context(directory: Path, event: dict, *, semantic: bool = False) -> Injectio
         if name in STARTED_EVENTS:
             mark_started(directory, session)
         if name in RESTORE_EVENTS:
+            if session:
+                reset_shown(directory, session)
             result = checkpoint_context(directory, session)
         elif name in CHECKPOINT_EVENTS:
             if session:

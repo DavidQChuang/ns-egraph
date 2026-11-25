@@ -42,7 +42,11 @@ class TestHookInstall(unittest.TestCase):
     def kiro_command(self, trigger):
         return next(hook["action"]["command"] for hook in self.kiro["hooks"] if hook["trigger"] == trigger)
 
+    def use_excerpt_mode(self):
+        (self.graphs.parent / "config.json").write_text(json.dumps({"recall_mode": "excerpt"}), encoding="utf-8")
+
     def test_installed_claude_adapter_returns_host_envelope(self):
+        self.use_excerpt_mode()
         command = self.claude["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]
         event = {"hook_event_name": "UserPromptSubmit", "session_id": "alpha", "prompt": "heat"}
         text = self.run_hook(command, event, CLAUDE_PROJECT_DIR=str(self.project))
@@ -53,6 +57,7 @@ class TestHookInstall(unittest.TestCase):
         self.assertIn("greenhouse.json#h-5@2", context)
 
     def test_kiro_prompt_from_environment_and_legacy_json(self):
+        self.use_excerpt_mode()
         command = self.kiro_command("UserPromptSubmit")
         text = self.run_hook(command, USER_PROMPT="Did we rule out heat in the east bed?")
         self.assertIn("greenhouse.json#h-5@2", text)
@@ -108,6 +113,7 @@ class TestHookInstall(unittest.TestCase):
         return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
     def test_kiro_repeated_prompt_is_deduped_per_session(self):
+        self.use_excerpt_mode()
         command = self.kiro_command("UserPromptSubmit")
         event = {"hook_event_name": "UserPromptSubmit", "session_id": "alpha"}
         first = self.run_hook(command, event, USER_PROMPT="Did we rule out heat in the east bed?")
@@ -118,6 +124,7 @@ class TestHookInstall(unittest.TestCase):
                       self.run_hook(command, other, USER_PROMPT="Did we rule out heat in the east bed?"))
 
     def test_kiro_empty_session_is_not_deduped(self):
+        self.use_excerpt_mode()
         command = self.kiro_command("UserPromptSubmit")
         event = {"hook_event_name": "UserPromptSubmit"}
         for _ in range(2):
@@ -162,6 +169,7 @@ class TestHookInstall(unittest.TestCase):
         self.assertEqual(list(state), ["started"])
 
     def test_event_log_line_has_expected_fields_and_no_prompt_text(self):
+        self.use_excerpt_mode()
         command = self.kiro_command("UserPromptSubmit")
         prompt = "Did we rule out heat in the east bed?"
         text = self.run_hook(command, {"hook_event_name": "UserPromptSubmit", "session_id": "alpha"},

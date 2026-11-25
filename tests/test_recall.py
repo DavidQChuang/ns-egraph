@@ -18,7 +18,8 @@ class TestRecall(unittest.TestCase):
     def setUp(self):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
-        self.root = Path(directory.name)
+        self.root = Path(directory.name) / "graphs"
+        self.root.mkdir()
         self.graph = self.root / "greenhouse.json"
         shutil.copyfile(ROOT / "examples" / self.graph.name, self.graph)
 
@@ -99,6 +100,7 @@ class TestRecall(unittest.TestCase):
         self.assertIn(f"{obs} → cites → {self.graph.name}#{source}@1", text)
 
     def test_misses_and_unreadable_graphs_stay_quiet(self):
+        (self.root.parent / "config.json").write_text(json.dumps({"recall_mode": "excerpt"}), encoding="utf-8")
         (self.root / "partial.json").write_text("{")
         self.assertEqual(self.hook("UserPromptSubmit", prompt="Explain photosynthesis"), "")
         self.assertIn("h-5@2", self.hook("UserPromptSubmit", prompt="heat"))

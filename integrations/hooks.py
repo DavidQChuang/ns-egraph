@@ -11,13 +11,14 @@ import time
 from pathlib import Path
 
 from egraph import GraphError, write_json
-from recall import HEADER, MAX_CHARS, checkpoint, checkpoint_path, load_graphs, resume, retrieve
+from recall import HEADER, MAX_CHARS, checkpoint, checkpoint_path, load_graphs, menu_text, resume, retrieve
 
 
 METHOD_TEXT = {
     "lexical": "This excerpt was retrieved from the saved graph using a text match to the current prompt.",
     "checkpoint": "This task state was restored from a checkpoint saved for the current session.",
     "semantic": "This excerpt was retrieved from the saved graph by matching the meaning of the current prompt to saved graph text.",
+    "menu": "These saved titles share terms with the current prompt. Run brief NODE on one before relying on it.",
 }
 RESTORE_EVENTS = {"sessionstart", "agentspawn", "postcompact"}
 STARTED_EVENTS = {"sessionstart", "agentspawn"}
@@ -26,6 +27,8 @@ PROMPT_EVENTS = {"userpromptsubmit", "promptsubmit"}
 KNOWN_EVENTS = RESTORE_EVENTS | CHECKPOINT_EVENTS | PROMPT_EVENTS
 INJECTED_LIMIT = 500
 RECORD_KEY = re.compile(r"[\w.-]+\.json#[\w-]+@\d+")
+MENU_KEY = re.compile(r"[\w.-]+\.json#[\w-]+")
+SHOWN_LIMIT = 500
 SAFE_SESSION = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}")
 ERRORS = (OSError, ValueError, GraphError, KeyError, TypeError, AttributeError, IndexError)
 
@@ -76,6 +79,15 @@ def checkpoint_context(directory: Path, session: str) -> Injection:
     return format_context("checkpoint", resume(directory, session)) if session else Injection()
 
 
+def recall_mode(directory: Path) -> str:
+    """Return "excerpt" when config.json beside the memory directory says so. Otherwise "menu"."""
+    try:
+        config = json.loads((directory.resolve().parent / "config.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return "menu"
+    return "excerpt" if isinstance(config, dict) and config.get("recall_mode") == "excerpt" else "menu"
+
+
 def session_file(directory: Path, session: str) -> Path:
     # Unsafe session ids are hashed so they cannot name a path outside sessions/.
     name = session if SAFE_SESSION.fullmatch(session) else hashlib.sha256(session.encode()).hexdigest()
@@ -120,6 +132,33 @@ def remember(directory: Path, session: str, keys: list) -> None:
     injected = injected_keys(state)
     injected += [key for key in dict.fromkeys(keys) if key not in injected]
     state["injected"] = injected[-INJECTED_LIMIT:]
+    try:
+        write_state(directory, session, state)
+    except OSError:
+        pass
+
+
+def shown_keys(state: dict) -> list:
+    value = state.get("shown", [])
+    return [key for key in value if isinstance(key, str)] if isinstance(value, list) else []
+
+
+def remember_shown(directory: Path, session: str, keys: list) -> None:
+    """Append menu keys to the session's "shown" list, keeping order and the newest SHOWN_LIMIT keys."""
+    state = read_state(directory, session)
+    state["shown"] = list(dict.fromkeys(shown_keys(state) + keys))[-SHOWN_LIMIT:]
+    try:
+        write_state(directory, session, state)
+    except OSError:
+        pass
+
+
+def reset_shown(directory: Path, session: str) -> None:
+    """Forget the menu keys shown in this session, so a restored session can show them again."""
+    state = read_state(directory, session)
+    if "shown" not in state:
+        return
+    state["shown"] = []
     try:
         write_state(directory, session, state)
     except OSError:
@@ -184,6 +223,13 @@ def prompt_context(directory: Path, prompt: str, session: str, *,
     if re.fullmatch(r"(?:please\s+)?(?:resume|continue)(?:\s+(?:this|the)\s+task)?[.!?]?",
                     prompt.strip(), re.IGNORECASE):
         return checkpoint_context(directory, session)
+    if recall_mode(directory) == "menu":
+        exclude = set(shown_keys(read_state(directory, session))) if session else set()
+        text = menu_text(directory, prompt, session=session or None, exclude=exclude)
+        if session and text:
+            remember_shown(directory, session, [key for line in text.splitlines()
+                                                for key in MENU_KEY.findall(line)])
+        return format_context("menu", text)
     method, text = retrieve(directory, prompt, semantic=semantic)
     keys = []
     if dedupe and session and text:
