@@ -4,11 +4,12 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
 from xml.etree.ElementTree import fromstring
 
 from integrations.hooks import format_context
-from recall import HEADER, MAX_CHARS, checkpoint
+from recall import HEADER, MAX_CHARS, checkpoint, checkpoint_path
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -101,3 +102,102 @@ class TestHookInstall(unittest.TestCase):
         command = self.kiro_command("UserPromptSubmit")
         self.assertEqual(self.run_hook(command, ["unexpected"], USER_PROMPT="heat"), "")
         self.assertEqual(self.run_hook(command, {"hook_event_name": []}, USER_PROMPT="heat"), "")
+
+    def event_log(self):
+        path = self.project / ".ns-egraph" / "hook-events.log"
+        return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+    def test_kiro_repeated_prompt_is_deduped_per_session(self):
+        command = self.kiro_command("UserPromptSubmit")
+        event = {"hook_event_name": "UserPromptSubmit", "session_id": "alpha"}
+        first = self.run_hook(command, event, USER_PROMPT="Did we rule out heat in the east bed?")
+        self.assertIn("greenhouse.json#h-5@2", first)
+        self.assertEqual(self.run_hook(command, event, USER_PROMPT="Did we rule out heat in the east bed?"), "")
+        other = {"hook_event_name": "UserPromptSubmit", "session_id": "beta"}
+        self.assertIn("greenhouse.json#h-5@2",
+                      self.run_hook(command, other, USER_PROMPT="Did we rule out heat in the east bed?"))
+
+    def test_kiro_empty_session_is_not_deduped(self):
+        command = self.kiro_command("UserPromptSubmit")
+        event = {"hook_event_name": "UserPromptSubmit"}
+        for _ in range(2):
+            self.assertIn("greenhouse.json#h-5@2", self.run_hook(command, event, USER_PROMPT="heat"))
+        self.assertFalse((self.project / ".ns-egraph" / "sessions").exists())
+
+    def test_kiro_auto_checkpoint_writes_only_graphs_changed_since_last_checkpoint(self):
+        command = self.kiro_command("AgentStop")
+        graph = self.graphs / "greenhouse.json"
+        checkpoint_file = checkpoint_path(self.graphs, "alpha")
+        state_file = self.project / ".ns-egraph" / "sessions" / "alpha.json"
+        os.utime(graph, (1000, 1000))
+        event = {"hook_event_name": "AgentStop", "session_id": "alpha"}
+
+        self.assertEqual(self.run_hook(command, event), "")
+        saved = json.loads(checkpoint_file.read_text(encoding="utf-8"))
+        self.assertEqual(saved, {"graph": "greenhouse.json", "next": None, "done": False})
+        first_checkpointed = json.loads(state_file.read_text(encoding="utf-8"))["checkpointed"]
+        self.assertGreater(first_checkpointed, 1000)
+
+        checkpoint_file.unlink()
+        self.assertEqual(self.run_hook(command, {"hook_event_name": "pre_compact", "session_id": "alpha"}), "")
+        self.assertFalse(checkpoint_file.exists())
+
+        os.utime(graph, (first_checkpointed + 60, first_checkpointed + 60))
+        self.run_hook(command, event)
+        self.assertTrue(checkpoint_file.is_file())
+        self.assertGreater(json.loads(state_file.read_text(encoding="utf-8"))["checkpointed"], first_checkpointed)
+
+    def test_kiro_auto_checkpoint_uses_started_as_the_default_cutoff(self):
+        state_file = self.project / ".ns-egraph" / "sessions" / "alpha.json"
+        state_file.parent.mkdir(parents=True)
+        state_file.write_text(json.dumps({"started": 2000}), encoding="utf-8")
+        os.utime(self.graphs / "greenhouse.json", (1000, 1000))
+        self.run_hook(self.kiro_command("PreCompact"), {"hook_event_name": "PreCompact", "session_id": "alpha"})
+        self.assertFalse(checkpoint_path(self.graphs, "alpha").exists())
+
+    def test_kiro_session_start_records_started_time(self):
+        self.run_hook(self.kiro_command("SessionStart"), {"hook_event_name": "SessionStart", "session_id": "alpha"})
+        state = json.loads((self.project / ".ns-egraph" / "sessions" / "alpha.json").read_text(encoding="utf-8"))
+        self.assertGreater(state["started"], 0)
+        self.assertEqual(list(state), ["started"])
+
+    def test_event_log_line_has_expected_fields_and_no_prompt_text(self):
+        command = self.kiro_command("UserPromptSubmit")
+        prompt = "Did we rule out heat in the east bed?"
+        text = self.run_hook(command, {"hook_event_name": "UserPromptSubmit", "session_id": "alpha"},
+                             USER_PROMPT=prompt)
+        entry = self.event_log()[-1]
+        self.assertEqual(set(entry), {"time", "event", "session", "method", "records", "chars"})
+        self.assertIsNotNone(datetime.fromisoformat(entry["time"]).tzinfo)
+        self.assertEqual(entry["event"], "userpromptsubmit")
+        self.assertEqual(entry["session"], "alpha")
+        self.assertEqual(entry["method"], "lexical")
+        self.assertEqual(entry["records"], 3)
+        self.assertEqual(entry["chars"], len(text))
+        raw = (self.project / ".ns-egraph" / "hook-events.log").read_text(encoding="utf-8")
+        self.assertNotIn("east bed", raw)
+        self.assertNotIn("rule out", raw)
+
+    def test_unknown_event_returns_empty_and_logs_no_event_name(self):
+        command = self.kiro_command("UserPromptSubmit")
+        self.assertEqual(self.run_hook(command, {"hook_event_name": "Bogus", "session_id": "alpha"},
+                                       USER_PROMPT="heat"), "")
+        entry = self.event_log()[-1]
+        self.assertEqual((entry["event"], entry["method"], entry["records"], entry["chars"]), ("", "none", 0, 0))
+
+    def test_event_names_are_normalised_in_the_log(self):
+        command = self.kiro_command("PreCompact")
+        for name in ("PreCompact", "pre_compact", "precompact"):
+            with self.subTest(name=name):
+                self.run_hook(command, {"hook_event_name": name, "session_id": "alpha"})
+                self.assertEqual(self.event_log()[-1]["event"], "precompact")
+
+    def test_kiro_hooks_json_adds_stop_and_precompact_triggers(self):
+        hooks = {hook["trigger"]: hook for hook in self.kiro["hooks"]}
+        self.assertEqual(list(hooks), ["UserPromptSubmit", "SessionStart", "PostCompact", "AgentStop", "PreCompact"])
+        self.assertEqual(hooks["AgentStop"]["name"], "Checkpoint exploration on agent stop")
+        self.assertEqual(hooks["PreCompact"]["name"], "Checkpoint exploration before compaction")
+        for trigger in ("AgentStop", "PreCompact"):
+            self.assertEqual(hooks[trigger]["action"], {"type": "command",
+                                                        "command": 'python3 -B ".ns-egraph/tool/integrations" kiro'})
+            self.assertEqual(hooks[trigger]["timeout"], 5)
