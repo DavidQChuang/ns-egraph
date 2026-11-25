@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -B \"$CLAUDE_PROJECT_DIR/.ns-egraph/tool/recall.py\" claude-hook \"$CLAUDE_PROJECT_DIR/.ns-egraph/graphs\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -B \"$CLAUDE_PROJECT_DIR/.ns-egraph/tool/recall.py\" claude-hook \"$CLAUDE_PROJECT_DIR/.ns-egraph/graphs\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

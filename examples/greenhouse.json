@@ -1,0 +1,621 @@
+{
+ "schema": "ns-egraph/1",
+ "title": "Greenhouse investigation",
+ "created": "2026-11-25T05:52:12+00:00",
+ "revision": 23,
+ "counter": 12,
+ "nodes": {
+  "origin-1": {
+   "kind": "origin",
+   "created_rev": 1,
+   "revisions": [
+    {
+     "rev": 1,
+     "title": "Origin",
+     "state": "recorded",
+     "payload": {
+      "statement": "Why did seedlings wilt in the east bed?",
+      "note": "request/background; not verified evidence"
+     },
+     "actor": "gardener",
+     "ts": "2026-11-25T05:52:12+00:00"
+    }
+   ]
+  },
+  "goal-2": {
+   "kind": "goal",
+   "created_rev": 2,
+   "revisions": [
+    {
+     "rev": 1,
+     "title": "Choose the first intervention",
+     "state": "open",
+     "payload": {},
+     "actor": "user",
+     "ts": "2026-11-25T05:52:12+00:00"
+    },
+    {
+     "rev": 2,
+     "title": "Choose the first intervention",
+     "state": "met",
+     "payload": {
+      "acceptance": "acc-1"
+     },
+     "actor": "user",
+     "ts": "2026-11-25T05:52:12+00:00"
+    }
+   ]
+  },
+  "q-3": {
+   "kind": "question",
+   "created_rev": 3,
+   "revisions": [
+    {
+     "rev": 1,
+     "title": "What changed before the wilting?",
+     "state": "open",
+     "payload": {},
+     "actor": "user",
+     "ts": "2026-11-25T05:52:12+00:00"
+    },
+    {
+     "rev": 2,
+     "title": "What changed before the wilting?",
+     "state": "answered",
+     "payload": {},
+     "actor": "user",
+     "ts": "2026-11-25T05:52:12+00:00"
+    }
+   ]
+  },
+  "h-4": {
+   "kind": "hypothesis",
+   "created_rev": 4,
+   "revisions": [
+    {
+     "rev": 1,
+     "title": "The east bed received too little water",
+     "state": "open",
+     "payload": {},
+     "actor": "user",
+     "ts": "2026-11-25T05:52:12+00:00"
+    },
+    {
+     "rev": 2,
+     "title": "The east bed received too little water",
+     "state": "supported",
+     "payload": {},
+     "actor": "user",
+     "ts": "2026-11-25T05:52:12+00:00"
+    }
+   ]
+  },
+  "h-5": {
+   "kind": "hypothesis",
+   "created_rev": 5,
+   "revisions": [
+    {
+     "rev": 1,
+     "title": "Heat alone explains the wilting",
+     "state": "open",
+     "payload": {
+      "aliases": [
+       "heat"
+      ]
+     },
+     "actor": "user",
+     "ts": "2026-11-25T05:52:12+00:00"
+    },
+    {
+     "rev": 2,
+     "title": "Heat alone explains the wilting",
+     "state": "refuted",
+     "payload": {
+      "aliases": [
+       "heat"
+      ]
+     },
+     "actor": "user",
+     "ts": "2026-11-25T05:52:12+00:00"
+    }
+   ]
+  },
+  "w-6": {
+   "kind": "work",
+   "created_rev": 6,
+   "revisions": [
+    {
+     "rev": 1,
+     "title": "Compare east and west beds",
+     "state": "open",
+     "payload": {},
+     "actor": "user",
+     "ts": "2026-11-25T05:52:12+00:00"
+    },
+    {
+     "rev": 2,
+     "title": "Compare east and west beds",
+     "state": "running",
+     "payload": {},
+     "actor": "user",
+     "ts": "2026-11-25T05:52:12+00:00"
+    },
+    {
+     "rev": 3,
+     "title": "Compare east and west beds",
+     "state": "done",
+     "payload": {},
+     "actor": "user",
+     "ts": "2026-11-25T05:52:12+00:00"
+    }
+   ]
+  },
+  "src-7": {
+   "kind": "source",
+   "created_rev": 8,
+   "revisions": [
+    {
+     "rev": 1,
+     "title": "Paired observations at noon",
+     "state": "unverified",
+     "payload": {
+      "resource": "examples/greenhouse-notes.md"
+     },
+     "actor": "user",
+     "ts": "2026-11-25T05:52:12+00:00"
+    }
+   ]
+  },
+  "obs-8": {
+   "kind": "observation",
+   "created_rev": 9,
+   "revisions": [
+    {
+     "rev": 1,
+     "title": "East soil was drier than west soil",
+     "state": "active",
+     "payload": {
+      "evidence": "East 12%, west 26% volumetric water content",
+      "epistemic": "observed"
+     },
+     "actor": "user",
+     "ts": "2026-11-25T05:52:12+00:00"
+    }
+   ]
+  },
+  "obs-9": {
+   "kind": "observation",
+   "created_rev": 10,
+   "revisions": [
+    {
+     "rev": 1,
+     "title": "Both beds had the same temperature",
+     "state": "active",
+     "payload": {
+      "evidence": "Both beds were 29 °C; only east seedlings wilted",
+      "epistemic": "observed"
+     },
+     "actor": "user",
+     "ts": "2026-11-25T05:52:12+00:00"
+    }
+   ]
+  },
+  "c-10": {
+   "kind": "claim",
+   "created_rev": 19,
+   "revisions": [
+    {
+     "rev": 1,
+     "title": "Watering is the better first intervention",
+     "state": "active",
+     "payload": {
+      "epistemic": "inferred"
+     },
+     "actor": "user",
+     "ts": "2026-11-25T05:52:12+00:00"
+    }
+   ]
+  },
+  "q-11": {
+   "kind": "question",
+   "created_rev": 22,
+   "revisions": [
+    {
+     "rev": 1,
+     "title": "Do seedlings recover after watering?",
+     "state": "open",
+     "payload": {},
+     "actor": "user",
+     "ts": "2026-11-25T05:52:12+00:00"
+    }
+   ]
+  },
+  "w-12": {
+   "kind": "work",
+   "created_rev": 23,
+   "revisions": [
+    {
+     "rev": 1,
+     "title": "Check the beds again tomorrow",
+     "state": "open",
+     "payload": {},
+     "actor": "user",
+     "ts": "2026-11-25T05:52:12+00:00"
+    }
+   ]
+  }
+ },
+ "edges": [
+  {
+   "id": "e1",
+   "type": "spawns",
+   "src": "origin-1",
+   "dst": "goal-2",
+   "src_rev": 1,
+   "dst_rev": 1,
+   "created_rev": 2
+  },
+  {
+   "id": "e2",
+   "type": "derives",
+   "src": "goal-2",
+   "dst": "q-3",
+   "src_rev": 1,
+   "dst_rev": 1,
+   "created_rev": 3
+  },
+  {
+   "id": "e3",
+   "type": "derives",
+   "src": "q-3",
+   "dst": "h-4",
+   "src_rev": 1,
+   "dst_rev": 1,
+   "created_rev": 4
+  },
+  {
+   "id": "e4",
+   "type": "derives",
+   "src": "q-3",
+   "dst": "h-5",
+   "src_rev": 1,
+   "dst_rev": 1,
+   "created_rev": 5
+  },
+  {
+   "id": "e5",
+   "type": "derives",
+   "src": "q-3",
+   "dst": "w-6",
+   "src_rev": 1,
+   "dst_rev": 1,
+   "created_rev": 6
+  },
+  {
+   "id": "e6",
+   "type": "yields",
+   "src": "w-6",
+   "dst": "src-7",
+   "src_rev": 2,
+   "dst_rev": 1,
+   "created_rev": 8
+  },
+  {
+   "id": "e7",
+   "type": "yields",
+   "src": "w-6",
+   "dst": "obs-8",
+   "src_rev": 2,
+   "dst_rev": 1,
+   "created_rev": 9
+  },
+  {
+   "id": "e8",
+   "type": "cites",
+   "src": "obs-8",
+   "dst": "src-7",
+   "src_rev": 1,
+   "dst_rev": 1,
+   "created_rev": 9
+  },
+  {
+   "id": "e9",
+   "type": "yields",
+   "src": "w-6",
+   "dst": "obs-9",
+   "src_rev": 2,
+   "dst_rev": 1,
+   "created_rev": 10
+  },
+  {
+   "id": "e10",
+   "type": "cites",
+   "src": "obs-9",
+   "dst": "src-7",
+   "src_rev": 1,
+   "dst_rev": 1,
+   "created_rev": 10
+  },
+  {
+   "id": "e11",
+   "type": "answers",
+   "src": "obs-8",
+   "dst": "q-3",
+   "src_rev": 1,
+   "dst_rev": 1,
+   "created_rev": 12
+  },
+  {
+   "id": "e12",
+   "type": "answers",
+   "src": "obs-9",
+   "dst": "q-3",
+   "src_rev": 1,
+   "dst_rev": 1,
+   "created_rev": 13
+  },
+  {
+   "id": "e13",
+   "type": "supports",
+   "src": "obs-8",
+   "dst": "h-4",
+   "src_rev": 1,
+   "dst_rev": 1,
+   "created_rev": 15
+  },
+  {
+   "id": "e14",
+   "type": "refutes",
+   "src": "obs-9",
+   "dst": "h-5",
+   "src_rev": 1,
+   "dst_rev": 1,
+   "created_rev": 16
+  },
+  {
+   "id": "e15",
+   "type": "supports",
+   "src": "obs-8",
+   "dst": "c-10",
+   "src_rev": 1,
+   "dst_rev": 1,
+   "created_rev": 19
+  },
+  {
+   "id": "e16",
+   "type": "supports",
+   "src": "obs-9",
+   "dst": "c-10",
+   "src_rev": 1,
+   "dst_rev": 1,
+   "created_rev": 19
+  },
+  {
+   "id": "e17",
+   "type": "supports",
+   "src": "c-10",
+   "dst": "goal-2",
+   "src_rev": 1,
+   "dst_rev": 1,
+   "created_rev": 20
+  },
+  {
+   "id": "e18",
+   "type": "derives",
+   "src": "c-10",
+   "dst": "q-11",
+   "src_rev": 1,
+   "dst_rev": 1,
+   "created_rev": 22
+  },
+  {
+   "id": "e19",
+   "type": "derives",
+   "src": "q-11",
+   "dst": "w-12",
+   "src_rev": 1,
+   "dst_rev": 1,
+   "created_rev": 23
+  }
+ ],
+ "acceptances": [
+  {
+   "id": "acc-1",
+   "goal": "goal-2",
+   "goal_rev": 1,
+   "edges": [
+    "e15",
+    "e16",
+    "e17"
+   ],
+   "evidence": {
+    "c-10": 1,
+    "obs-8": 1,
+    "obs-9": 1
+   },
+   "method": "self",
+   "rationale": "The moisture difference explains the paired observations better than heat alone.",
+   "actor": "user",
+   "stale": false,
+   "ts": "2026-11-25T05:52:12+00:00"
+  }
+ ],
+ "events": [
+  {
+   "rev": 1,
+   "cmd": "CreateGraph",
+   "ts": "2026-11-25T05:52:12+00:00",
+   "node": "origin-1",
+   "kind": "origin"
+  },
+  {
+   "rev": 2,
+   "cmd": "AddNode",
+   "ts": "2026-11-25T05:52:12+00:00",
+   "node": "goal-2",
+   "kind": "goal"
+  },
+  {
+   "rev": 3,
+   "cmd": "AddNode",
+   "ts": "2026-11-25T05:52:12+00:00",
+   "node": "q-3",
+   "kind": "question"
+  },
+  {
+   "rev": 4,
+   "cmd": "AddNode",
+   "ts": "2026-11-25T05:52:12+00:00",
+   "node": "h-4",
+   "kind": "hypothesis"
+  },
+  {
+   "rev": 5,
+   "cmd": "AddNode",
+   "ts": "2026-11-25T05:52:12+00:00",
+   "node": "h-5",
+   "kind": "hypothesis"
+  },
+  {
+   "rev": 6,
+   "cmd": "AddNode",
+   "ts": "2026-11-25T05:52:12+00:00",
+   "node": "w-6",
+   "kind": "work"
+  },
+  {
+   "rev": 7,
+   "cmd": "SetState",
+   "ts": "2026-11-25T05:52:12+00:00",
+   "node": "w-6",
+   "state": "running"
+  },
+  {
+   "rev": 8,
+   "cmd": "AddNode",
+   "ts": "2026-11-25T05:52:12+00:00",
+   "node": "src-7",
+   "kind": "source"
+  },
+  {
+   "rev": 9,
+   "cmd": "AddNode",
+   "ts": "2026-11-25T05:52:12+00:00",
+   "node": "obs-8",
+   "kind": "observation"
+  },
+  {
+   "rev": 10,
+   "cmd": "AddNode",
+   "ts": "2026-11-25T05:52:12+00:00",
+   "node": "obs-9",
+   "kind": "observation"
+  },
+  {
+   "rev": 11,
+   "cmd": "SetState",
+   "ts": "2026-11-25T05:52:12+00:00",
+   "node": "w-6",
+   "state": "done"
+  },
+  {
+   "rev": 12,
+   "cmd": "Link",
+   "ts": "2026-11-25T05:52:12+00:00",
+   "edge": "e11",
+   "type": "answers",
+   "src": "obs-8",
+   "dst": "q-3",
+   "actor": "user"
+  },
+  {
+   "rev": 13,
+   "cmd": "Link",
+   "ts": "2026-11-25T05:52:12+00:00",
+   "edge": "e12",
+   "type": "answers",
+   "src": "obs-9",
+   "dst": "q-3",
+   "actor": "user"
+  },
+  {
+   "rev": 14,
+   "cmd": "SetState",
+   "ts": "2026-11-25T05:52:12+00:00",
+   "node": "q-3",
+   "state": "answered"
+  },
+  {
+   "rev": 15,
+   "cmd": "Link",
+   "ts": "2026-11-25T05:52:12+00:00",
+   "edge": "e13",
+   "type": "supports",
+   "src": "obs-8",
+   "dst": "h-4",
+   "actor": "user"
+  },
+  {
+   "rev": 16,
+   "cmd": "Link",
+   "ts": "2026-11-25T05:52:12+00:00",
+   "edge": "e14",
+   "type": "refutes",
+   "src": "obs-9",
+   "dst": "h-5",
+   "actor": "user"
+  },
+  {
+   "rev": 17,
+   "cmd": "SetState",
+   "ts": "2026-11-25T05:52:12+00:00",
+   "node": "h-4",
+   "state": "supported"
+  },
+  {
+   "rev": 18,
+   "cmd": "SetState",
+   "ts": "2026-11-25T05:52:12+00:00",
+   "node": "h-5",
+   "state": "refuted"
+  },
+  {
+   "rev": 19,
+   "cmd": "AddNode",
+   "ts": "2026-11-25T05:52:12+00:00",
+   "node": "c-10",
+   "kind": "claim"
+  },
+  {
+   "rev": 20,
+   "cmd": "Link",
+   "ts": "2026-11-25T05:52:12+00:00",
+   "edge": "e17",
+   "type": "supports",
+   "src": "c-10",
+   "dst": "goal-2",
+   "actor": "user"
+  },
+  {
+   "rev": 21,
+   "cmd": "AcceptGoal",
+   "ts": "2026-11-25T05:52:12+00:00",
+   "node": "goal-2",
+   "state": "met"
+  },
+  {
+   "rev": 22,
+   "cmd": "AddNode",
+   "ts": "2026-11-25T05:52:12+00:00",
+   "node": "q-11",
+   "kind": "question"
+  },
+  {
+   "rev": 23,
+   "cmd": "AddNode",
+   "ts": "2026-11-25T05:52:12+00:00",
+   "node": "w-12",
+   "kind": "work"
+  }
+ ]
+}
