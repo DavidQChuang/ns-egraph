@@ -232,6 +232,8 @@ egraph.py GRAPH --actor NAME record EVIDENCE.jsonl
 recall.py menu DIRECTORY QUERY [--session ID] [--graph NAME] [--size N]
 ```
 
+Only graph files directly inside the graph directory are searched. Move a closed investigation into a subdirectory such as `archive/` to keep its titles out of menus. The file stays on disk and `egraph.py` still reads it. Keep the graph directory to the investigations in use: on the live store, menus became much less useful as closed investigations were added.
+
 With `--session`, the command keeps a count of which graph the session matched most, and searches that graph first. Pass `--graph` to search one graph. The prompt hook uses this command in its default mode.
 
 `recall.py questions` merges likely user questions into a sidecar file beside the graph directory. Each node can have up to five questions. Each entry is `FILE#NODE_ID` mapped to a list of strings. The command validates every entry before it writes anything. Questions help the menu find nodes that use different words from the request.
