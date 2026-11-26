@@ -37,6 +37,11 @@ class MenuTest(unittest.TestCase):
     def session_data(self, session):
         return json.loads((self.sessions / f"{session}.json").read_text(encoding="utf-8"))
 
+    def bind(self, session, name):
+        """Write a session file that is already bound to graph name."""
+        self.sessions.mkdir(parents=True, exist_ok=True)
+        (self.sessions / f"{session}.json").write_text(json.dumps({"bindings": {name: 1}}), encoding="utf-8")
+
     def merge(self, payload):
         """Run `recall.py questions` on a merge file holding payload. Returns the completed process."""
         source = self.project / "merge.json"
@@ -107,9 +112,26 @@ class MenuTest(unittest.TestCase):
         scores = [score for score, _, _ in candidates]
         self.assertEqual(scores, sorted(scores, reverse=True))
 
+    def test_two_rare_shared_words_need_a_binding_when_unbound(self):
+        nid = self.save("a.json", ["Pulsar simidc trace"])[0]
+        self.assertEqual(menu_text(self.directory, "pulsar simidc"), "")
+        self.bind("s1", "a.json")
+        lines = menu_text(self.directory, "pulsar simidc", session="s1").splitlines()
+        self.assertEqual(lines[1:], [f"1. a.json#{nid}: Pulsar simidc trace"])
+
+    def test_three_rare_shared_words_make_a_menu_when_unbound(self):
+        nid = self.save("a.json", ["Pulsar simidc trace"])[0]
+        lines = menu_text(self.directory, "pulsar simidc trace").splitlines()
+        self.assertEqual(lines, [MENU_HEADER, f"1. a.json#{nid}: Pulsar simidc trace"])
+
+    def test_shared_numeric_id_alone_makes_a_menu_when_unbound(self):
+        nid = self.save("a.json", ["Valve 4417 seated"])[0]
+        lines = menu_text(self.directory, "Check 4417 status").splitlines()
+        self.assertEqual(lines, [MENU_HEADER, f"1. a.json#{nid}: Valve 4417 seated"])
+
     def test_session_binding_keeps_later_calls_in_the_bound_graph(self):
         a, b = self.two_graphs()
-        first = menu_text(self.directory, "gearbox leak", session="s1")
+        first = menu_text(self.directory, "gearbox seal leak", session="s1")
         self.assertEqual(first.splitlines()[1], f"1. a.json#{a[1]}: Gearbox seal leak")
         self.assertEqual(self.session_data("s1")["bindings"], {"a.json": 1})
 
@@ -128,7 +150,7 @@ class MenuTest(unittest.TestCase):
         self.two_graphs()
         self.sessions.mkdir(parents=True)
         (self.sessions / "s1.json").write_text(json.dumps({"injected": ["a.json#h-1@1"], "started": 5.0}))
-        self.assertIn("Gearbox seal leak", menu_text(self.directory, "gearbox leak", session="s1"))
+        self.assertIn("Gearbox seal leak", menu_text(self.directory, "gearbox seal leak", session="s1"))
         data = self.session_data("s1")
         self.assertEqual(data["injected"], ["a.json#h-1@1"])
         self.assertEqual(data["started"], 5.0)
@@ -136,7 +158,7 @@ class MenuTest(unittest.TestCase):
 
     def test_no_session_writes_no_session_file(self):
         self.two_graphs()
-        self.assertIn("Gearbox seal leak", menu_text(self.directory, "gearbox leak"))
+        self.assertIn("Gearbox seal leak", menu_text(self.directory, "gearbox seal leak"))
         self.assertFalse(self.sessions.exists())
 
     def test_graph_name_restricts_candidates(self):
@@ -154,7 +176,8 @@ class MenuTest(unittest.TestCase):
 
     def test_output_lines_and_title_cut(self):
         self.save("a.json", ["Gearbox leak check " + "filler " * 60, "Gearbox leak short"])
-        lines = menu_text(self.directory, "gearbox leak").splitlines()
+        self.bind("s1", "a.json")
+        lines = menu_text(self.directory, "gearbox leak", session="s1").splitlines()
         self.assertEqual(lines[0], MENU_HEADER)
         pattern = re.compile(r"^\d+\. [\w.-]+\.json#[\w-]+: ")
         for line in lines[1:]:
@@ -166,6 +189,7 @@ class MenuTest(unittest.TestCase):
 
     def test_menu_is_the_default_mode_and_excerpt_needs_config(self):
         leak = self.save("a.json", ["Gearbox leak"])[0]
+        self.bind("s1", "a.json")
         self.assertEqual(recall_mode(self.directory), "menu")
         menu = prompt_context(self.directory, "gearbox leak", "s1")
         self.assertEqual(menu.method, "menu")
@@ -208,7 +232,8 @@ class MenuTest(unittest.TestCase):
                          (0, f"1 entries written to {questions_path(self.directory)}"))
         candidates = menu_candidates(self.load(), query, questions=load_questions(self.directory))
         self.assertEqual([(path.name, nid) for _, path, nid in candidates], [("a.json", target)])
-        lines = menu_text(self.directory, query).splitlines()
+        self.bind("s1", "a.json")
+        lines = menu_text(self.directory, query, session="s1").splitlines()
         self.assertEqual(lines[1:], [f"1. a.json#{target}: Coolant loop check"])
 
     def test_invalid_merge_exits_1_and_writes_nothing(self):

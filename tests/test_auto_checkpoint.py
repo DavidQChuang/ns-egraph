@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -8,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from integrations.hooks import auto_checkpoint, read_checkpoint  # noqa: E402
+from integrations.hooks import auto_checkpoint, read_checkpoint, write_state  # noqa: E402
 from recall import checkpoint  # noqa: E402
 
 
@@ -49,6 +50,50 @@ class AutoCheckpointTests(unittest.TestCase):
         egraph(self.graph, "add", "goal", "--title", "Another goal")
         auto_checkpoint(self.root, self.session)
         self.assertEqual(read_checkpoint(self.root, self.session)["next"], "goal-2")
+
+
+class BoundAutoCheckpointTests(unittest.TestCase):
+    """Two graphs in the store, with B the most recently changed one."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name) / "graphs"
+        self.root.mkdir()
+        self.session = "bound-test-session"
+        for name in ("A.json", "B.json"):
+            egraph(self.root / name, "init", "--title", name, "--origin", "Why?")
+            egraph(self.root / name, "add", "goal", "--title", "Ship the thing")
+        os.utime(self.root / "A.json", (1_000_000_000, 1_000_000_000))
+        os.utime(self.root / "B.json", (2_000_000_000, 2_000_000_000))
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def bind(self, bindings: dict) -> None:
+        write_state(self.root, self.session, {"bindings": bindings})
+
+    def test_binding_overrides_most_recently_changed_graph(self):
+        self.bind({"A.json": 2})
+        auto_checkpoint(self.root, self.session)
+        self.assertEqual(read_checkpoint(self.root, self.session)["graph"], "A.json")
+
+    def test_without_bindings_most_recently_changed_graph_is_used(self):
+        auto_checkpoint(self.root, self.session)
+        self.assertEqual(read_checkpoint(self.root, self.session)["graph"], "B.json")
+
+    def test_highest_count_wins_among_bindings(self):
+        self.bind({"A.json": 1, "B.json": 3})
+        auto_checkpoint(self.root, self.session)
+        self.assertEqual(read_checkpoint(self.root, self.session)["graph"], "B.json")
+
+    def test_done_checkpoint_for_bound_graph_is_not_revived(self):
+        checkpoint(self.root, Path("A.json"), self.session, None, True)
+        before = read_checkpoint(self.root, self.session)
+        self.bind({"A.json": 2})
+        egraph(self.root / "A.json", "add", "goal", "--title", "Another goal")
+        auto_checkpoint(self.root, self.session)
+        self.assertEqual(read_checkpoint(self.root, self.session), before)
+        self.assertTrue(read_checkpoint(self.root, self.session)["done"])
 
 
 if __name__ == "__main__":

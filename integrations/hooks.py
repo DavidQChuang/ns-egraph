@@ -178,11 +178,32 @@ def mark_started(directory: Path, session: str) -> None:
         pass
 
 
-def auto_checkpoint(directory: Path, session: str) -> None:
-    """Checkpoint the most recently changed graph since this session last checkpointed.
+def bound_graph(root: Path, state: dict) -> Path | None:
+    """The graph this session is bound to: the highest count in state["bindings"].
 
-    Keeps an explicit checkpoint that the agent saved for the same graph, and never
-    revives a checkpoint marked done.
+    Ties go to the smaller name. Returns None when there are no positive counts or
+    the top graph file is missing from the memory directory.
+    """
+    raw = state.get("bindings")
+    if not isinstance(raw, dict):
+        return None
+    bindings = {name: count for name, count in raw.items()
+                if isinstance(name, str) and isinstance(count, int) and count > 0}
+    if not bindings:
+        return None
+    top = min(bindings, key=lambda name: (-bindings[name], name))
+    if top != Path(top).name or not (root / top).is_file():
+        return None
+    return root / top
+
+
+def auto_checkpoint(directory: Path, session: str) -> None:
+    """Checkpoint the session's bound graph, or else the most recently changed graph.
+
+    The bound graph is the one with the highest count in the session's bindings. Without
+    a usable binding, the most recently changed graph since this session last checkpointed
+    is used. Keeps an explicit checkpoint that the agent saved for the same graph, and
+    never revives a checkpoint marked done.
     """
     if not session:
         return
@@ -190,10 +211,13 @@ def auto_checkpoint(directory: Path, session: str) -> None:
     state = read_state(root, session)
     cutoff = next((state[key] for key in ("checkpointed", "started")
                    if isinstance(state.get(key), (int, float))), 0)
-    changed = [(path.stat().st_mtime, path) for path, _ in load_graphs(root)]
-    changed = [(mtime, path) for mtime, path in changed if mtime > cutoff]
-    if changed:
-        _, path = max(changed, key=lambda item: item[0])
+    path = bound_graph(root, state)
+    if path is None:
+        changed = [(path.stat().st_mtime, path) for path, _ in load_graphs(root)]
+        changed = [(mtime, path) for mtime, path in changed if mtime > cutoff]
+        if changed:
+            _, path = max(changed, key=lambda item: item[0])
+    if path is not None:
         existing = read_checkpoint(root, session)
         same_graph = existing.get("graph") == path.name
         if not existing.get("done") and not (same_graph and existing.get("next")):

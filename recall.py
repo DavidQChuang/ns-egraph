@@ -34,6 +34,10 @@ OPEN_ITEM_LIMIT = 3
 OPEN_ITEM_CHARS = 100
 RARE_SHARE = 0.10
 RARE_MIN = 3
+# Rare words a node must share with the query before it makes a menu. A session with no
+# graph binding yet searches every graph, so it needs one more shared word.
+MENU_MIN_SHARED = 2
+MENU_UNBOUND_MIN_SHARED = 3
 MENU_STOP_ENGLISH = set("""a about above across after afterwards again against all almost alone along already also although
 always am among amongst an and another any anyhow anyone anything anyway anywhere are around as at be became
 because become becomes becoming been before beforehand behind being below beside besides between beyond both bottom
@@ -313,7 +317,8 @@ def full_text(graph: Graph, nid: str) -> str:
 
 
 def menu_candidates(graphs, query: str, scope: str | None = None, size: int = MENU_SIZE,
-                    questions: dict | None = None, *, exclude: set[str] = frozenset()):
+                    questions: dict | None = None, *, exclude: set[str] = frozenset(),
+                    min_shared: int = MENU_MIN_SHARED):
     """Rank active, non-origin nodes that share rare words or numeric ids with the query.
 
     N and df count nodes across every graph. A scope (a graph file name) only filters the
@@ -348,7 +353,7 @@ def menu_candidates(graphs, query: str, scope: str | None = None, size: int = ME
             continue
         rare = sorted(word for word in query_words & node_words if word in idf)
         numbers = query_numbers & node_numbers & rare_numbers
-        if len(rare) < 2 and not numbers:
+        if len(rare) < min_shared and not numbers:
             continue
         candidates.append((sum(idf[word] for word in rare) + 3.0 * len(numbers), path, nid))
     candidates.sort(key=lambda item: (-item[0], item[1].name, item[2]))
@@ -463,7 +468,12 @@ def menu_text(directory: Path, query: str, *, session: str | None = None, graph_
         scope = graph_name
     else:
         scope = min(bindings, key=lambda name: (-bindings[name], name)) if bindings else None
-    candidates = menu_candidates(graphs, query, scope, size, questions=questions, exclude=exclude)
+    if graph_name is not None or bindings:
+        min_shared = MENU_MIN_SHARED
+    else:
+        min_shared = MENU_UNBOUND_MIN_SHARED
+    candidates = menu_candidates(graphs, query, scope, size, questions=questions, exclude=exclude,
+                                 min_shared=min_shared)
     if not candidates:
         return ""
     if session:
