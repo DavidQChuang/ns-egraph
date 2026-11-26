@@ -1,4 +1,5 @@
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -194,6 +195,45 @@ class TestEgraph(unittest.TestCase):
             self.assertIn("informs order-42", g.frontier()[0]["reasons"])
             self.assertEqual(g.state("src-3"), "rejected")
 
+    def test_alias_warning_when_term_is_too_broad(self):
+        g = Graph.new("t", "o")
+        g.add("hypothesis", "Clock source Pulsar", {"aliases": ["Pulsar"]})
+        g.add("question", "Pulsar timing drift?")
+        g.add("question", "Check the pulsar cable")
+        g.add("question", "PULSAR gate setting")
+        g.add("question", "Pulsar")
+        g.add("question", "Pulsars are noisy")  # whole word only: not a match
+        v = g.validate()
+        self.assertTrue(v["ok"], v)
+        self.assertIn("alias 'Pulsar' on h-2 matches 4 other nodes; use a more specific term", v["warnings"])
+
+    def test_alias_warning_threshold_and_inactive_nodes(self):
+        g = Graph.new("t", "o")
+        g.add("hypothesis", "Clock source", {"aliases": ["Pulsar"]})
+        g.add("question", "Pulsar timing")
+        g.add("question", "Pulsar cable")
+        g.add("question", "Pulsar gate")
+        self.assertTrue(any("alias 'Pulsar'" in w for w in g.validate()["warnings"]))
+        g.set_state("q-4", "parked")  # parked is still active
+        self.assertTrue(any("matches 3 other nodes" in w for w in g.validate()["warnings"]))
+        w = g.add("work", "Pulsar sweep")
+        g.set_state(w, "stopped")  # stopped nodes do not count
+        self.assertTrue(any("matches 3 other nodes" in x for x in g.validate()["warnings"]))
+        g2 = Graph.new("t", "o")
+        g2.add("hypothesis", "Clock source", {"aliases": ["Pulsar"]})
+        g2.add("question", "Pulsar timing")
+        g2.add("question", "Pulsar cable")
+        w2 = g2.add("work", "Pulsar sweep")
+        g2.set_state(w2, "stopped")
+        self.assertFalse([x for x in g2.validate()["warnings"] if "alias" in x])
+
+    def test_alias_on_ref_id_gives_no_warning(self):
+        g = Graph.new("t", "o")
+        g.add("hypothesis", "Pump fault", {"aliases": ["ec1549b8"]})
+        for title in ("Check pump log", "Read vendor note", "Compare runs", "Inspect seal"):
+            g.add("question", title, {"refs": ["ec1549b8"]})
+        self.assertEqual(g.validate()["warnings"], [])
+
     def test_cli_roundtrip(self):
         tool = str(ROOT / "egraph.py")
         with tempfile.TemporaryDirectory() as d:
@@ -208,6 +248,153 @@ class TestEgraph(unittest.TestCase):
             r = run("link", "supports", "q-2", "origin-1")
             self.assertEqual(r.returncode, 3)
             self.assertFalse(json.loads(r.stdout)["ok"])
+
+
+class TestBriefAndRecord(unittest.TestCase):
+    CONTRACT = ('Reply contract: write one JSON line per finding to your evidence file: '
+                '{"kind":"observation","title":"...","quote":"...","about":"<hypothesis, claim or question id from '
+                'this brief>","relation":"confirms|contradicts|adds","by":"<work id from this brief>"}. '
+                'Give about, by, or both. The relation is required with about. Cite only ids shown above.')
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+        self.path = self.dir / "g.json"
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def egraph(self, *args):
+        return subprocess.run([sys.executable, str(ROOT / "egraph.py"), str(self.path), "--actor", "sam", *args],
+                              capture_output=True, text=True)
+
+    def save(self, g):
+        g.save(self.path)
+
+    def test_brief_prints_node_quote_and_neighbours(self):
+        g, goal, h, src, w, obs = build()
+        self.save(g)
+        r = self.egraph("brief", obs)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout.splitlines(), [
+            "obs-6 observation [active] Low soil moisture",
+            "Soil moisture was 12%",
+            "Neighbours:",
+            "  cites -> src-4 source [unverified] Greenhouse log",
+            "  yields <- w-5 work [done] Read Monday's log",
+            self.CONTRACT,
+        ])
+
+    def test_brief_arrows_and_order(self):
+        g, goal, h, src, w, obs = build()
+        self.save(g)
+        r = self.egraph("brief", h)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout.splitlines(), [
+            "h-3 hypothesis [open] The soil dried out",
+            "Neighbours:",
+            "  derives <- origin-1 origin [recorded] Origin",
+            "  derives -> w-5 work [done] Read Monday's log",
+            self.CONTRACT,
+        ])
+
+    def test_brief_caps_neighbours_at_twelve_and_respects_max_chars(self):
+        g = Graph.new("t", "o")
+        h = g.add("hypothesis", "H")
+        for i in range(13):
+            g.add("question", f"Q{i}", derives_from=[h])
+        self.save(g)  # h-2 has 14 neighbours: origin-1 (in) and q-3..q-15 (out)
+        r = self.egraph("brief", h)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout.count("  derives "), 12)
+        self.assertIn("...(2 more neighbours not shown)", r.stdout)
+        self.assertNotIn("q-8 ", r.stdout)  # sorted by id: q-3 .. q-7 fill the 12 slots
+        r = self.egraph("brief", h, "--max-chars", "600")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertLessEqual(len(r.stdout.rstrip("\n")), 600)
+        shown = r.stdout.count("  derives ")
+        hidden = int(re.search(r"\.\.\.\((\d+) more neighbours not shown\)", r.stdout).group(1))
+        self.assertEqual(shown + hidden, 14)
+        self.assertTrue(r.stdout.rstrip("\n").endswith(self.CONTRACT))
+
+    def test_brief_unknown_node_exits_1(self):
+        g, *_ = build()
+        self.save(g)
+        r = self.egraph("brief", "nope-99")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("unknown node nope-99", r.stderr)
+        self.assertEqual(r.stdout, "")
+
+    def test_record_by_only_attaches_to_running_work(self):
+        g, goal, h, src, w, obs = build()
+        w2 = g.add("work", "Probe again", derives_from=[h])
+        g.set_state(w2, "running")
+        self.save(g)
+        f = self.dir / "records.jsonl"
+        f.write_text(json.dumps({"kind": "observation", "title": "Only work", "quote": "Probe saw nothing",
+                                 "by": w2}) + "\n", encoding="utf-8")
+        r = self.egraph("record", str(f))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(json.loads(r.stdout)["ids"], ["obs-8"])
+        g2 = Graph.load(self.path)
+        self.assertEqual(len(g2.edges("yields", src=w2, dst="obs-8")), 1)
+        self.assertEqual(g2.edges("supports", src="obs-8"), [])
+
+    def test_record_adds_observations_edges_and_actor(self):
+        g, goal, h, src, w, obs = build()
+        w2 = g.add("work", "Probe again", derives_from=[h])  # counter is 6, so w-7
+        self.save(g)
+        lines = [
+            {"kind": "observation", "title": "Probe reads 9%", "quote": "Probe read 9% at noon",
+             "about": h, "relation": "confirms", "by": w2},
+            "",
+            {"kind": "observation", "title": "Log disagrees", "quote": "Monday's log says 14%",
+             "about": h, "relation": "contradicts"},
+        ]
+        f = self.dir / "records.jsonl"
+        f.write_text("\n".join(x if isinstance(x, str) else json.dumps(x) for x in lines) + "\n", encoding="utf-8")
+        r = self.egraph("record", str(f))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(json.loads(r.stdout), {"ok": True, "recorded": 2, "ids": ["obs-8", "obs-9"]})
+        g2 = Graph.load(self.path)
+        self.assertEqual(sum(1 for n in g2.d["nodes"].values() if n["kind"] == "observation"), 3)
+        self.assertEqual(len(g2.edges("supports", src="obs-8", dst=h)), 1)
+        self.assertEqual(len(g2.edges("yields", src=w2, dst="obs-8")), 1)
+        self.assertEqual(len(g2.edges("refutes", src="obs-9", dst=h)), 1)
+        self.assertEqual(g2.cur("obs-8")["actor"], "sam")
+        self.assertEqual(g2.cur("obs-8")["payload"], {"quote": "Probe read 9% at noon", "epistemic": "observed"})
+        linked = [e for e in g2.d["events"] if e["cmd"] == "Link" and e.get("actor") == "sam"]
+        self.assertEqual(len(linked), 3)  # supports, yields, refutes
+
+    def test_record_unknown_about_writes_nothing(self):
+        g, goal, h, *_ = build()
+        self.save(g)
+        before = self.path.read_bytes()
+        f = self.dir / "records.jsonl"
+        f.write_text(json.dumps({"kind": "observation", "title": "ok", "quote": "x", "about": h,
+                                 "relation": "confirms"}) + "\n"
+                     + json.dumps({"kind": "observation", "title": "bad", "quote": "y", "about": "nope-99",
+                                   "relation": "confirms"}) + "\n", encoding="utf-8")
+        r = self.egraph("record", str(f))
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("line 2: not_found", r.stderr)
+        self.assertNotIn("line 1", r.stderr)
+        self.assertEqual(self.path.read_bytes(), before)
+
+    def test_record_invalid_relation_or_missing_quote_writes_nothing(self):
+        g, goal, h, *_ = build()
+        self.save(g)
+        before = self.path.read_bytes()
+        f = self.dir / "records.jsonl"
+        f.write_text(json.dumps({"kind": "observation", "title": "a", "quote": "x", "about": h,
+                                 "relation": "supports"}) + "\n"
+                     + json.dumps({"kind": "observation", "title": "b", "about": h,
+                                   "relation": "confirms"}) + "\n", encoding="utf-8")
+        r = self.egraph("record", str(f))
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("line 1: invalid_argument: relation must be one of", r.stderr)
+        self.assertIn("line 2: invalid_argument: observation needs a quote", r.stderr)
+        self.assertEqual(self.path.read_bytes(), before)
 
 
 if __name__ == "__main__":

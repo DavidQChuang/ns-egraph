@@ -210,6 +210,40 @@ python3 egraph.py examples/greenhouse.json overview --limit 4
 python3 egraph.py examples/greenhouse.json render > /tmp/greenhouse.mmd
 ```
 
+## `brief` and `record` for subagents
+
+`brief` prints one node for a subagent. It shows the node's state, its quote or statement (cut to 300 characters), and up to 12 neighbours with edge types and arrows. It ends with the reply contract. The default limit is 1500 characters, and `--max-chars` changes it. An unknown node exits 1.
+
+```text
+egraph.py GRAPH brief NODE [--max-chars N]
+```
+
+`record` applies findings that a subagent wrote as JSON lines. Each line has `kind` (`observation` or `source`), `title`, and `quote` for an observation. Attach it with `about` (a hypothesis, claim or question id from the brief), `relation` (`confirms`, `contradicts` or `adds`, required with `about`), `by` (a running or open work id), or both `about` and `by`. The command validates every line before it writes. If any line fails, it writes nothing and reports the line numbers. Pass `--actor` before `record` so the events show which subagent produced the findings.
+
+```text
+egraph.py GRAPH --actor NAME record EVIDENCE.jsonl
+```
+
+## `menu` and `questions`
+
+`recall.py menu` lists up to five saved titles that share rare words or numeric ids with a query. A title is a candidate only when it shares at least two rare words, or a numeric id of four or more digits, with the query. A word is rare when it appears in at most 10% of the nodes, and at least three nodes. Common English words and generic words such as "test" or "report" never count. Each line shows `FILE#NODE_ID`, which `brief` accepts after the graph path.
+
+```text
+recall.py menu DIRECTORY QUERY [--session ID] [--graph NAME] [--size N]
+```
+
+Only graph files directly inside the graph directory are searched. Move a closed investigation into a subdirectory such as `archive/` to keep its titles out of menus. The file stays on disk and `egraph.py` still reads it. Keep the graph directory to the investigations in use: on the live store, menus became much less useful as closed investigations were added.
+
+With `--session`, the command keeps a count of which graph the session matched most, and searches that graph first. Pass `--graph` to search one graph. The prompt hook uses this command in its default mode.
+
+`recall.py questions` merges likely user questions into a sidecar file beside the graph directory. Each node can have up to five questions. Each entry is `FILE#NODE_ID` mapped to a list of strings. The command validates every entry before it writes anything. Questions help the menu find nodes that use different words from the request.
+
+```text
+recall.py questions DIRECTORY FILE.json
+```
+
+The hook's mode is set by `config.json` beside the graph directory. `{"recall_mode": "menu"}` is the default. `{"recall_mode": "excerpt"}` restores the older single-excerpt output.
+
 ## `recall` and `index`
 
 ```text

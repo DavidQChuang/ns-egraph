@@ -56,6 +56,8 @@ class TestInstall(unittest.TestCase):
         memory = self.project / ".ns-egraph/graphs"
         graph = memory / "greenhouse.json"
         shutil.copyfile(ROOT / "examples/greenhouse.json", graph)
+        (self.project / ".ns-egraph" / "config.json").write_text(json.dumps({"recall_mode": "excerpt"}),
+                                                                encoding="utf-8")
         settings = json.loads((self.project / ".claude/settings.local.json").read_bytes())
         claude = settings["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]
         kiro_path = self.project / ".kiro/hooks/ns-egraph.json"

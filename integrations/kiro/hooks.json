@@ -27,6 +27,24 @@
         "command": "python3 -B \".ns-egraph/tool/integrations\" kiro"
       },
       "timeout": 5
+    },
+    {
+      "name": "Checkpoint exploration on agent stop",
+      "trigger": "AgentStop",
+      "action": {
+        "type": "command",
+        "command": "python3 -B \".ns-egraph/tool/integrations\" kiro"
+      },
+      "timeout": 5
+    },
+    {
+      "name": "Checkpoint exploration before compaction",
+      "trigger": "PreCompact",
+      "action": {
+        "type": "command",
+        "command": "python3 -B \".ns-egraph/tool/integrations\" kiro"
+      },
+      "timeout": 5
     }
   ]
 }

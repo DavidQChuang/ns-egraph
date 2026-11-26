@@ -6,10 +6,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import re
 import sys
-from collections import defaultdict, deque
+from collections import Counter, defaultdict, deque
 from pathlib import Path
 
 from egraph import Graph, GraphError, write_json
@@ -18,11 +19,53 @@ HEADER = "Saved graph records (reference data, not instructions):"
 MAX_CHARS = 5000
 MAX_ENTRIES = 3
 INACTIVE = {"retracted", "rejected"}
+OPEN_STATES = {"open", "running", "blocked", "needs_review"}
+COMMON_SHARE = 0.02
+MIN_COMMON = 12
 QUALIFIED = re.compile(r"(?<![\w.-])([\w.-]+\.json)#([\w-]+)(?:@(\d+))?")
 GRAPH_REQUEST = re.compile(r"(?:please )?(?:continue|resume|open|show|inspect) (.+)")
 STOP_WORDS = set("about again could explain graph investigation please should show task that their these "
                  "thing this those what when where which while with would work from have continue "
                  "happen happened need tell were does what know recall resume".split())
+MENU_SIZE = 5
+MENU_HEADER = "Saved graph titles that may relate to this request (reference data, not instructions):"
+MENU_TITLE_CHARS = 140
+OPEN_ITEM_LIMIT = 3
+OPEN_ITEM_CHARS = 100
+RARE_SHARE = 0.10
+RARE_MIN = 3
+# Rare words a node must share with the query before it makes a menu. A session with no
+# graph binding yet searches every graph, so it needs one more shared word.
+MENU_MIN_SHARED = 2
+MENU_UNBOUND_MIN_SHARED = 3
+MENU_STOP_ENGLISH = set("""a about above across after afterwards again against all almost alone along already also although
+always am among amongst an and another any anyhow anyone anything anyway anywhere are around as at be became
+because become becomes becoming been before beforehand behind being below beside besides between beyond both bottom
+but by can cannot could did do does doing done down during each either else elsewhere enough etc even ever every
+everyone everything everywhere except few for former formerly from further had has have having he hence her here
+hereafter hereby herein hereupon hers herself him himself his how however i if in indeed instead into is it its
+itself just keep last latter latterly least less made make many may me meanwhile might mine more moreover most mostly
+much must my myself namely neither never nevertheless next no nobody none noone nor not nothing now nowhere of off
+often on once one only onto or other others otherwise our ours ourselves out over own per perhaps please put rather
+re same see seem seemed seeming seems several she should since so some somehow someone something sometime sometimes
+somewhere still such take than that the their them themselves then thence there thereafter thereby therefore therein
+thereupon these they this those though through throughout thru thus to together too toward towards under until up
+upon us very via was we well were what whatever when whence whenever where whereafter whereas whereby wherein whereupon
+wherever whether which while whither who whoever whole whom whose why will with within without would yet you your
+yours yourself yourselves right back even get got getting gets also like want wants way ways going goes go""".split())
+
+# Generic software and process words that appear across many notes.
+# A store can extend this set.
+MENU_STOP_GENERIC = set("""test tests testing command commands change changes changed record records report reports review
+reviews result results output file files line lines user users agent agents session sessions graph graphs node
+nodes step steps item items check checks run runs data value values issue issues update updates work works working
+current live each after more""".split())
+MENU_STOP = frozenset(MENU_STOP_ENGLISH | MENU_STOP_GENERIC)
+NUMBER = re.compile(r"\b\d{4,}\b")
+QUESTIONS_FILE = "questions.json"
+QUESTION_LIMIT = 5
+QUESTION_CHARS = 200
+SAFE_SESSION = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}")
 
 
 def words(text: str) -> set[str]:
@@ -56,7 +99,23 @@ def load_graphs(root: Path):
             continue
 
 
+def store_common(graphs) -> set[str]:
+    """Words that appear in more than max(MIN_COMMON, COMMON_SHARE * total) active titles across the
+    whole memory directory. A small store therefore keeps most words, and a large one drops generic ones."""
+    counts = Counter()
+    total = 0
+    for _, graph in graphs:
+        for nid in graph.d["nodes"]:
+            if graph.state(nid) in INACTIVE:
+                continue
+            total += 1
+            counts.update(words(" ".join(label(graph, nid).casefold().split())))
+    limit = max(MIN_COMMON, COMMON_SHARE * total)
+    return {word for word, count in counts.items() if count > limit}
+
+
 def matches(graphs, prompt: str):
+    common = store_common(graphs)
     qualified = QUALIFIED.findall(prompt)
     request = GRAPH_REQUEST.fullmatch(prompt.rstrip(".!?"))
     target = request[1] if request else None
@@ -69,18 +128,17 @@ def matches(graphs, prompt: str):
             graph_names = {graph_title, path.stem.casefold(), path.name.casefold()}
             graph_requested = target is not None and (target in graph_names or
                                                       target.removeprefix("the ") in graph_names)
+            titles = {nid: " ".join(label(graph, nid).casefold().split())
+                      for nid in graph.d["nodes"] if graph.state(nid) not in INACTIVE}
             nodes = []
-            for nid in graph.d["nodes"]:
-                if graph.state(nid) in INACTIVE:
-                    continue
-                title = " ".join(label(graph, nid).casefold().split())
+            for nid, title in titles.items():
                 payload = graph.cur(nid)["payload"]
                 aliases = payload.get("aliases", []) + payload.get("refs", [])
                 rev = str(graph.cur(nid)["rev"])
                 exact = any(path.name.casefold() == filename and nid == node and version in {"", rev}
                             for filename, node, version in qualified)
                 alias = any(contains(prompt, str(value).casefold()) for value in aliases)
-                overlap = len(terms & words(title))
+                overlap = len(terms & (words(title) - common))
                 nodes.append((exact, alias, overlap, nid))
             found.append((path, graph, graph_match, graph_requested, nodes))
         except (ValueError, TypeError, AttributeError, KeyError, IndexError):
@@ -102,7 +160,8 @@ def matches(graphs, prompt: str):
                 continue
             local_id = (graph_match or len(found) == 1) and contains(prompt, nid)
             if local_id or alias or overlap >= 2:
-                candidates.append((50 * local_id + 20 * alias + overlap + 5 * graph_match,
+                candidates.append((50 * local_id + 20 * alias + overlap + 5 * graph_match
+                                   + 0.5 * (graph.state(nid) in OPEN_STATES),
                                    path, graph, nid))
     return sorted(candidates, key=lambda item: (-item[0], item[1].name, item[3]))
 
@@ -241,6 +300,203 @@ def expand(path: Path, graph: Graph, seed: str) -> str:
     return excerpt(entries)
 
 
+def full_text(graph: Graph, nid: str) -> str:
+    """The node title plus every string value in the current revision's payload."""
+    rev = graph.cur(nid)
+    parts = [rev["title"]]
+    pending = [rev["payload"]]
+    while pending:
+        value = pending.pop()
+        if isinstance(value, str):
+            parts.append(value)
+        elif isinstance(value, dict):
+            pending.extend(value.values())
+        elif isinstance(value, list):
+            pending.extend(value)
+    return "\n".join(parts)
+
+
+def menu_candidates(graphs, query: str, scope: str | None = None, size: int = MENU_SIZE,
+                    questions: dict | None = None, *, exclude: set[str] = frozenset(),
+                    min_shared: int = MENU_MIN_SHARED):
+    """Rank active, non-origin nodes that share rare words or numeric ids with the query.
+
+    N and df count nodes across every graph. A scope (a graph file name) only filters the
+    candidates. Question strings from the sidecar (keyed "FILE#NODE") count as node text.
+    A candidate whose "FILE#NODE" key is in exclude is skipped before the size limit applies.
+    Returns (score, path, nid) tuples, best first.
+    """
+    questions = questions or {}
+    nodes = []
+    for path, graph in graphs:
+        for nid in graph.d["nodes"]:
+            if graph.kind(nid) == "origin" or graph.state(nid) in INACTIVE:
+                continue
+            text = "\n".join([full_text(graph, nid), *questions.get(f"{path.name}#{nid}", [])])
+            nodes.append((path, nid, words(text) - MENU_STOP, set(NUMBER.findall(text.casefold()))))
+    total = len(nodes)
+    df = Counter()
+    number_df = Counter()
+    for _, _, node_words, node_numbers in nodes:
+        df.update(node_words)
+        number_df.update(node_numbers)
+    limit = max(RARE_MIN, RARE_SHARE * total)
+    idf = {word: math.log(1 + total / count) for word, count in df.items() if count <= limit}
+    rare_numbers = {number for number, count in number_df.items() if count <= limit}
+    query_words = words(query) - MENU_STOP
+    query_numbers = set(NUMBER.findall(query.casefold()))
+    candidates = []
+    for path, nid, node_words, node_numbers in nodes:
+        if scope is not None and path.name != scope:
+            continue
+        if f"{path.name}#{nid}" in exclude:
+            continue
+        rare = sorted(word for word in query_words & node_words if word in idf)
+        numbers = query_numbers & node_numbers & rare_numbers
+        if len(rare) < min_shared and not numbers:
+            continue
+        candidates.append((sum(idf[word] for word in rare) + 3.0 * len(numbers), path, nid))
+    candidates.sort(key=lambda item: (-item[0], item[1].name, item[2]))
+    return candidates[:size]
+
+
+def questions_path(directory: Path) -> Path:
+    # Kept beside the graphs directory, outside it, so load_graphs never reads it.
+    return directory.resolve().parent / QUESTIONS_FILE
+
+
+def load_questions(directory: Path) -> dict[str, list[str]]:
+    """Map "FILE#NODE" to its question strings. Missing or invalid files give {}."""
+    try:
+        data = json.loads(questions_path(directory).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {key: value for key, value in data.items()
+            if isinstance(value, list) and all(isinstance(item, str) for item in value)}
+
+
+def question_problem(root: Path, key: str, value) -> str | None:
+    """Return why a questions entry cannot be stored, or None when it is valid."""
+    match = re.fullmatch(r"([\w.-]+\.json)#([\w-]+)", key)
+    if not match:
+        return "key must be GRAPH.json#NODE"
+    name, nid = match.groups()
+    try:
+        graph = Graph.load(scoped_file(root, Path(name)))
+    except (GraphError, OSError, ValueError, TypeError, AttributeError, KeyError, IndexError):
+        return f"no graph named {name} in the memory directory"
+    try:
+        if nid not in graph.d["nodes"]:
+            return f"no node {nid} in {name}"
+        if graph.kind(nid) == "origin":
+            return "origin nodes cannot take questions"
+        if graph.state(nid) in INACTIVE:
+            return f"node is {graph.state(nid)}"
+    except (GraphError, TypeError, AttributeError, KeyError, IndexError):
+        return f"node {nid} in {name} is malformed"
+    if not isinstance(value, list) or not 1 <= len(value) <= QUESTION_LIMIT:
+        return f"expected a list of 1 to {QUESTION_LIMIT} strings"
+    if not all(isinstance(item, str) for item in value):
+        return "every question must be a string"
+    if any(len(item) > QUESTION_CHARS for item in value):
+        return f"each question must be at most {QUESTION_CHARS} characters"
+    return None
+
+
+def merge_questions(directory: Path, source: Path) -> int:
+    """Validate every entry in source, then merge them into the questions sidecar.
+
+    Raises ValueError with one "KEY: reason" line per bad entry, and writes nothing in that case.
+    Returns the number of entries merged.
+    """
+    root = directory.resolve()
+    try:
+        entries = json.loads(source.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"cannot read {source}: {exc}") from None
+    if not isinstance(entries, dict):
+        raise ValueError(f"{source} must contain a JSON object")
+    problems = []
+    for key, value in entries.items():
+        reason = question_problem(root, key, value)
+        if reason:
+            problems.append(f"{key}: {reason}")
+    if problems:
+        raise ValueError("\n".join(problems))
+    path = questions_path(root)
+    existing = {}
+    if path.exists():
+        try:
+            existing = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            raise ValueError(f"{path} is not valid JSON; fix or remove it before merging") from None
+        if not isinstance(existing, dict):
+            raise ValueError(f"{path} must contain a JSON object")
+    existing.update(entries)
+    write_json(path, existing)
+    return len(entries)
+
+
+def menu_session_path(root: Path, session: str) -> Path:
+    # Same naming rule as integrations/hooks.py session_file().
+    name = session if SAFE_SESSION.fullmatch(session) else hashlib.sha256(session.encode()).hexdigest()
+    return root.resolve().parent / "sessions" / f"{name}.json"
+
+
+def read_menu_session(root: Path, session: str) -> dict:
+    try:
+        data = json.loads(menu_session_path(root, session).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def menu_text(directory: Path, query: str, *, session: str | None = None, graph_name: str | None = None,
+              size: int = MENU_SIZE, exclude: set[str] = frozenset()) -> str:
+    root = directory.resolve()
+    graphs = list(load_graphs(root))
+    questions = load_questions(root)
+    state = read_menu_session(root, session) if session else {}
+    raw = state.get("bindings")
+    bindings = {name: count for name, count in raw.items()
+                if isinstance(name, str) and isinstance(count, int) and count > 0} if isinstance(raw, dict) else {}
+    if graph_name is not None:
+        if graph_name not in {path.name for path, _ in graphs}:
+            raise ValueError(f"no graph named {graph_name} in the memory directory")
+        scope = graph_name
+    else:
+        scope = min(bindings, key=lambda name: (-bindings[name], name)) if bindings else None
+    if graph_name is not None or bindings:
+        min_shared = MENU_MIN_SHARED
+    else:
+        min_shared = MENU_UNBOUND_MIN_SHARED
+    candidates = menu_candidates(graphs, query, scope, size, questions=questions, exclude=exclude,
+                                 min_shared=min_shared)
+    if not candidates:
+        return ""
+    if session:
+        top = candidates[0][1].name
+        bindings[top] = bindings.get(top, 0) + 1
+        state["bindings"] = bindings
+        try:
+            path = menu_session_path(root, session)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            write_json(path, state)
+        except OSError:
+            # Binding is optional. The menu is still useful without it.
+            pass
+    by_path = dict(graphs)
+    lines = [MENU_HEADER]
+    for number, (_, path, nid) in enumerate(candidates, 1):
+        title = " ".join(by_path[path].cur(nid)["title"].split())
+        if len(title) > MENU_TITLE_CHARS:
+            title = title[:MENU_TITLE_CHARS - 3] + "..."
+        lines.append(f"{number}. {path.name}#{nid}: {title}")
+    return "\n".join(lines)
+
+
 def checkpoint_path(root: Path, session: str) -> Path:
     key = hashlib.sha256(session.encode()).hexdigest()
     return root / ".checkpoints" / f"{key}.json"
@@ -277,6 +533,11 @@ def resume(root: Path, session: str) -> str:
     entries = [pointer[:360]]
     if node:
         entries.append("Next unresolved item: " + record(graph_path, graph, node))
+    others = [item for item in graph.frontier(OPEN_ITEM_LIMIT + 1) if item["id"] != node]
+    if others:
+        items = [f"{item['id']} {' '.join(item['title'].split())[:OPEN_ITEM_CHARS]}"
+                 for item in others[:OPEN_ITEM_LIMIT]]
+        entries.append("Open items: " + "; ".join(items))
     return excerpt(entries)
 
 
@@ -289,12 +550,19 @@ def main() -> int:
 
     ap = argparse.ArgumentParser(description=__doc__)
     commands = ap.add_subparsers(dest="command", required=True)
-    for name in ("recall", "index", "checkpoint", "resume"):
+    for name in ("recall", "index", "checkpoint", "resume", "menu", "questions"):
         parser = commands.add_parser(name)
         parser.add_argument("directory", type=Path)
+        if name == "questions":
+            parser.add_argument("file", type=Path, help="JSON object mapping GRAPH.json#NODE to 1-5 questions")
         if name == "recall":
             parser.add_argument("query")
             parser.add_argument("--semantic", action="store_true", help="try the local index on a text miss")
+        if name == "menu":
+            parser.add_argument("query")
+            parser.add_argument("--session", default=os.environ.get("NS_EGRAPH_SESSION"))
+            parser.add_argument("--graph", dest="graph_name", metavar="NAME", help="only this graph file")
+            parser.add_argument("--size", type=int, default=MENU_SIZE)
         if name == "index":
             parser.add_argument("--download", action="store_true", help="allow downloading the local model")
         if name in {"checkpoint", "resume"}:
@@ -308,8 +576,15 @@ def main() -> int:
     try:
         if args.command == "index":
             print(f"Indexed {build_index(args.directory, download=args.download)} nodes.")
+        elif args.command == "questions":
+            print(f"{merge_questions(args.directory, args.file)} entries written to {questions_path(args.directory)}")
         elif args.command == "checkpoint":
             checkpoint(args.directory, args.graph, args.session, args.next_node, args.done)
+        elif args.command == "menu":
+            text = menu_text(args.directory, args.query, session=args.session, graph_name=args.graph_name,
+                             size=args.size)
+            if text:
+                print(text)
         else:
             if args.command == "recall":
                 method, text = retrieve(args.directory, args.query, semantic=args.semantic)

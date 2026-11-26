@@ -221,7 +221,7 @@ def apply(root: Path, host: str, *, install: bool, semantic: bool, kiro_agent: P
         owned_file(path, data, previous)
 
     if install:
-        scripts = ["install.py", "egraph.py", "recall.py", "semantic_recall.py", "requirements-semantic.txt",
+        scripts = ["install.py", "egraph.py", "recall.py", "ingest.py", "semantic_recall.py", "requirements-semantic.txt",
                    "README.md", "cli.md"]
         templates = [item.relative_to(SOURCE) for item in (SOURCE / "integrations").rglob("*")
                      if item.is_file() and item.suffix in {".py", ".json", ".md"}]

@@ -5,10 +5,11 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from egraph import Graph
-from recall import MAX_CHARS, checkpoint, recall, resume
+from recall import MAX_CHARS, checkpoint, matches, recall, resume
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -17,7 +18,8 @@ class TestRecall(unittest.TestCase):
     def setUp(self):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
-        self.root = Path(directory.name)
+        self.root = Path(directory.name) / "graphs"
+        self.root.mkdir()
         self.graph = self.root / "greenhouse.json"
         shutil.copyfile(ROOT / "examples" / self.graph.name, self.graph)
 
@@ -98,6 +100,7 @@ class TestRecall(unittest.TestCase):
         self.assertIn(f"{obs} → cites → {self.graph.name}#{source}@1", text)
 
     def test_misses_and_unreadable_graphs_stay_quiet(self):
+        (self.root.parent / "config.json").write_text(json.dumps({"recall_mode": "excerpt"}), encoding="utf-8")
         (self.root / "partial.json").write_text("{")
         self.assertEqual(self.hook("UserPromptSubmit", prompt="Explain photosynthesis"), "")
         self.assertIn("h-5@2", self.hook("UserPromptSubmit", prompt="heat"))
@@ -129,3 +132,42 @@ class TestRecall(unittest.TestCase):
         graph.set_state("q-11", "answered")
         graph.save(self.graph)
         self.assertIn("greenhouse.json#w-12", resume(self.root, "session-a"))
+
+    def ranked(self, prompt):
+        return [nid for *_, nid in matches([(self.graph, Graph.load(self.graph))], prompt)]
+
+    def test_open_work_outranks_done_node_with_equal_overlap(self):
+        graph = Graph.new("Field notes", "Recorded request.")
+        done = graph.add("work", "Cryostat drift log")
+        graph.set_state(done, "done")
+        open_work = graph.add("work", "Cryostat drift check")
+        graph.save(self.graph)
+        self.assertLess(done, open_work)  # the done node has the lower id, so id order alone would pick it
+
+        self.assertEqual(self.ranked("Is the cryostat drift settling?"), [open_work, done])
+
+    def test_common_words_do_not_count_toward_overlap(self):
+        graph = Graph.new("Field notes", "Recorded request.")
+        graph.add("work", "Pulsar sedo beam tilt")
+        graph.add("work", "Pulsar sedo gain check")
+        graph.add("work", "Sedo pulsar cooling")
+        cryostat = graph.add("work", "Thermal drift in cryostat")
+        graph.save(self.graph)
+
+        # Lower the minimum so that "pulsar" and "sedo", in 3 of 5 active titles, count as common.
+        with mock.patch("recall.MIN_COMMON", 2):
+            self.assertEqual(self.ranked("Did the pulsar sedo drift?"), [])
+            # One common word plus one distinctive word is still below the two-word threshold.
+            self.assertEqual(self.ranked("Plan the pulsar cooling"), [])
+            self.assertEqual(self.ranked("Is the cryostat thermal drift stable?"), [cryostat])
+
+    def test_small_store_keeps_shared_words(self):
+        # With the default minimum of 12, a 5-node store keeps "pulsar" and "sedo" as matchable.
+        graph = Graph.new("Field notes", "Recorded request.")
+        beam = graph.add("work", "Pulsar sedo beam tilt")
+        gain = graph.add("work", "Pulsar sedo gain check")
+        cooling = graph.add("work", "Sedo pulsar cooling")
+        graph.add("work", "Thermal drift in cryostat")
+        graph.save(self.graph)
+
+        self.assertCountEqual(self.ranked("Did the pulsar sedo drift?"), [beam, gain, cooling])
